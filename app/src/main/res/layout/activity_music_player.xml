@@ -3,8 +3,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@drawable/MusicPlayerBackground"
+    android:layout_height="wrap_content"
+    android:background="@drawable/music_player_background"
     android:orientation="vertical"
     android:weightSum="10"
     tools:context=".MusicPlayerActivity">
@@ -12,72 +12,69 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="7"
+        android:layout_weight="6"
         android:gravity="center"
         android:orientation="vertical"
         tools:ignore="Suspicious0dp">
+
         <TextView
             android:id="@+id/songnametext"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:layout_margin="20dp"
             android:ellipsize="marquee"
             android:marqueeRepeatLimit="marquee_forever"
             android:padding="10dp"
             android:singleLine="true"
             android:text="Song Name"
+            android:textAlignment="center"
             android:textColor="@color/white"
             android:textSize="22sp"
-            android:textAlignment="center"
-            android:textStyle="italic"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-        </TextView>
+            android:textStyle="italic"></TextView>
 
         <ImageView
             android:id="@+id/songimageview"
-            android:layout_marginBottom="8dp"
-            android:src="@drawable/ic_music"
             android:layout_width="250dp"
-            android:layout_height="250dp">
-        </ImageView>
+            android:layout_height="250dp"
+            android:layout_marginBottom="8dp"
+            android:src="@drawable/ic_music"></ImageView>
 
         <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="60dp">
+
             <SeekBar
                 android:id="@+id/seekbar"
-                android:layout_centerInParent="true"
-                android:layout_alignParentBottom="true"
-                android:layout_margin="20dp"
-                android:layout_marginBottom="40dp"
                 android:layout_width="250dp"
-                android:layout_height="wrap_content">
-            </SeekBar>
+                android:layout_height="wrap_content"
+                android:layout_alignParentBottom="true"
+                android:layout_centerInParent="true"
+                android:layout_margin="20dp"
+                android:layout_marginBottom="40dp"></SeekBar>
 
             <TextView
                 android:id="@+id/songstarttime"
-                android:layout_toLeftOf="@id/seekbar"
-                android:layout_centerInParent="true"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:layout_alignParentLeft="false"
+                android:layout_centerInParent="true"
                 android:layout_marginLeft="20dp"
+                android:layout_toLeftOf="@id/seekbar"
                 android:text="0:00"
                 android:textColor="@color/white"
-                android:textSize="14sp"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content">
-            </TextView>
+                android:textSize="14sp"></TextView>
 
             <TextView
                 android:id="@+id/songendtime"
-                android:layout_toRightOf="@id/seekbar"
-                android:layout_centerInParent="true"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:layout_alignParentRight="false"
+                android:layout_centerInParent="true"
                 android:layout_marginRight="20dp"
+                android:layout_toRightOf="@id/seekbar"
                 android:text="3:54"
                 android:textColor="@color/white"
-                android:textSize="14sp"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content">
-            </TextView>
+                android:textSize="14sp"></TextView>
 
         </RelativeLayout>
 
@@ -87,9 +84,83 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="3">
+
         <RelativeLayout
+
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="match_parent">
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/buttonplay"
+                android:layout_width="70dp"
+                android:layout_height="70dp"
+                android:layout_centerHorizontal="true"
+                android:layout_centerVertical="true"
+                android:background="@drawable/ic_pause_icon">
+
+            </androidx.appcompat.widget.AppCompatButton>
+            //play button
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/skipsongnext"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:layout_centerVertical="true"
+                android:layout_marginTop="10dp"
+                android:layout_toRightOf="@id/buttonplay"
+                android:background="@drawable/ic_skip_next_icon">
+
+            </androidx.appcompat.widget.AppCompatButton>
+            // skip next
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/skipsongprev"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:layout_centerVertical="true"
+                android:layout_marginTop="10dp"
+                android:layout_toLeftOf="@id/buttonplay"
+                android:background="@drawable/ic_skip_previous_icon">
+
+            </androidx.appcompat.widget.AppCompatButton>
+            // skip back
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/buttonshuffle"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_centerVertical="true"
+                android:layout_marginTop="20dp"
+                android:layout_marginRight="10dp"
+                android:layout_toLeftOf="@id/skipsongprev"
+                android:background="@drawable/ic_shuffle_icon">
+
+            </androidx.appcompat.widget.AppCompatButton>
+            // shuffle
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/buttonrepeat"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_centerVertical="true"
+                android:layout_marginLeft="10dp"
+                android:layout_marginTop="20dp"
+                android:layout_toRightOf="@id/skipsongnext"
+                android:background="@drawable/ic_repeat_icon">
+
+            </androidx.appcompat.widget.AppCompatButton>
+            // repeat single song
+
+        </RelativeLayout>
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_weight="1"
+        android:layout_width="match_parent"
+        android:layout_height="0dp">
+
+        <include layout="@layout/bottomtoolbar" />
     </LinearLayout>
 
 </LinearLayout>

@@ -1,6 +1,7 @@
 package com.example.tempo;
 
 import android.Manifest;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.Menu;
@@ -8,6 +9,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
@@ -40,13 +42,14 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState){
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
         toolbar=findViewById(R.id.tempoToolBar);
         setSupportActionBar(toolbar);
-
         getSupportActionBar().setTitle("Tempo");
 
         listView = findViewById(R.id.listViewSong);
         runtimePermission();
+
 
 
     }
@@ -83,6 +86,7 @@ public class MainActivity extends AppCompatActivity {
 
         return true;
     }
+
 
 
 
@@ -166,6 +170,17 @@ public class MainActivity extends AppCompatActivity {
 
         customAdapter customAdapter = new customAdapter();
         listView.setAdapter(customAdapter);
+
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+                String songName = (String) listView.getItemAtPosition(i);
+                startActivity(new Intent(getApplicationContext(), MusicPlayerActivity.class)
+                        .putExtra( "songs", mySongs)
+                        .putExtra( "songname", songName)
+                        .putExtra("pos", i));
+            }
+        });
     }
 
     class customAdapter extends BaseAdapter

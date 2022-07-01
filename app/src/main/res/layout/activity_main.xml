@@ -4,23 +4,23 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/light_grey"
+    android:background="@drawable/music_player_background"
     tools:context=".MainActivity">
 
-    <include
-        layout="@layout/appbar"/>
+    <include layout="@layout/appbar" />
 
     <ListView
         android:id="@+id/listViewSong"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layout_marginTop="56dp"
         android:divider="@android:color/transparent"
         android:dividerHeight="10.0sp"
-        android:padding="8dp"
-        android:layout_marginTop="56dp">
+        android:padding="8dp">
 
     </ListView>
 
 
+    <include layout="@layout/bottomtoolbar" />
 
 </RelativeLayout>

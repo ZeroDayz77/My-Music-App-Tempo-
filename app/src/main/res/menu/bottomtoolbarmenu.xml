@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:title="Library"
+        android:enabled="true"
+        android:icon="@drawable/ic_library_music_icon"
+        android:id="@+id/songLibraryButton"
+        app:showAsAction="always"/>
+
+    <item
+        android:title="Currently Playing"
+        android:enabled="true"
+        android:icon="@drawable/ic_music"
+        android:id="@+id/songPlayingButton"
+        app:showAsAction="always"/>
+
+    <item
+        android:title="Playlists"
+        android:enabled="true"
+        android:icon="@drawable/ic_playlist_icon"
+        android:id="@+id/playlistButton"
+        app:showAsAction="always"/>
+</menu>
