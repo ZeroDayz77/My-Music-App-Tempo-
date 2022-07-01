@@ -31,6 +31,7 @@ import com.karumi.dexter.listener.single.PermissionListener;
 import java.io.File;
 import java.lang.reflect.ParameterizedType;
 import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     ListView listView;
@@ -176,8 +177,8 @@ public class MainActivity extends AppCompatActivity {
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
                 String songName = (String) listView.getItemAtPosition(i);
                 startActivity(new Intent(getApplicationContext(), MusicPlayerActivity.class)
-                        .putExtra( "songs", mySongs)
-                        .putExtra( "songname", songName)
+                        .putExtra("songs", mySongs)
+                        .putExtra("songname", songName)
                         .putExtra("pos", i));
             }
         });
@@ -209,6 +210,7 @@ public class MainActivity extends AppCompatActivity {
             View myView = getLayoutInflater().inflate(R.layout.song_list_names, null);
             TextView songText = myView.findViewById(R.id.songname);
             songText.setSelected(true);
+            songText.setEnabled(true);
             songText.setText(items[i]);
 
             return myView;

@@ -26,6 +26,7 @@
 
         </ImageView>
 
+
         <TextView
             android:id="@+id/songname"
             android:layout_width="wrap_content"
@@ -40,9 +41,8 @@
             android:marqueeRepeatLimit="marquee_forever"
             android:ellipsize="marquee"
             android:scrollHorizontally="true"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:freezesText="true"
+            android:focusable="false"
+            android:focusableInTouchMode = "false"
             android:padding="6dp"
             android:text="Song Name"
             android:textColor="@color/white"
