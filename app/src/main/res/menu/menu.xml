@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto">
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context=".MainActivity">
 
 
     <item
@@ -13,10 +15,14 @@
     </item>
 
     <item
+        android:id="@+id/settings_button"
+        android:orderInCategory="2"
         android:title="Settings"
-        android:icon="@drawable/ic_vert_settings"
-        android:id="@+id/settings"
-        app:showAsAction="always">
+        android:visible="true"
+        app:showAsAction="never">
+
     </item>
+
+
 
 </menu>

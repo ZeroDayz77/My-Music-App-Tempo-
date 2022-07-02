@@ -52,14 +52,14 @@ public class MainActivity extends AppCompatActivity {
         runtimePermission();
 
 
-
     }
+
 
     // method for toolbar menu
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        MenuInflater inflater=getMenuInflater();
-        inflater.inflate(R.menu.menu,menu);
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.menu, menu);
 
 
         // for the search feature
@@ -76,7 +76,6 @@ public class MainActivity extends AppCompatActivity {
         };
 
 
-
         menu.findItem(R.id.search_button).setOnActionExpandListener(onActionExpandListener);
         SearchView searchView = (SearchView) menu.findItem(R.id.search_button).getActionView();
         searchView.setQueryHint("Name of song...");
@@ -89,22 +88,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    // for settings
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        switch (item.getItemId())
+        {
+            case R.id.search_button:
+                Toast.makeText(this,  "Search",Toast.LENGTH_SHORT).show();
+                break;
 
+            case R.id.settings_button:
+                Toast.makeText(this,  "Settings",Toast.LENGTH_SHORT).show();
+                break;
+        }
+        return super.onOptionsItemSelected(item);
+    }
 
-//    @Override
-//    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-//        switch (item.getItemId())
-//        {
-//            case R.id.search_button:
-//                Toast.makeText(this,  "Search",Toast.LENGTH_SHORT).show();
-//                break;
-//
-//            case R.id.settings:
-//                Toast.makeText(this,  "Settings",Toast.LENGTH_SHORT).show();
-//                break;
-//        }
-//        return super.onOptionsItemSelected(item);
-//    }
 
     // this method will ask on first runtime for permission to access and read phone's internal storage.
     public void runtimePermission()
