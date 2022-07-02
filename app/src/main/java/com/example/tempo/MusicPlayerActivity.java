@@ -139,16 +139,22 @@ public class MusicPlayerActivity extends AppCompatActivity {
         songendtime.setText(endTime);
 
         final Handler handler = new Handler();
-        final int delay = 1000;
+        final int delay = 500;
 
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 String currentTime = createSongTime(mediaPlayer.getCurrentPosition());
                 songstarttime.setText(currentTime);
+
+                String endTime = createSongTime(mediaPlayer.getDuration());
+                songendtime.setText(endTime);
+
                 handler.postDelayed(this, delay);
             }
         },delay);
+
+
 
         buttonplay.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -169,13 +175,7 @@ public class MusicPlayerActivity extends AppCompatActivity {
         mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
             @Override
             public void onCompletion(MediaPlayer mediaPlayer) {
-                if((mediaPlayer.getCurrentPosition() < mediaPlayer.getDuration() && buttonshuffle.callOnClick()) == true)
-                {
-                    buttonshuffle.performClick();
-                }
-                else {
                     skipsongnext.performClick();
-                }
             }
         });
 
@@ -190,8 +190,6 @@ public class MusicPlayerActivity extends AppCompatActivity {
                 sname = mySongs.get(position).getName();
                 songnametext.setText(sname);
                 mediaPlayer.start();
-                String endTime = createSongTime(mediaPlayer.getDuration());
-                songendtime.setText(endTime);
                 buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
                 startAnimation(songimageview);
             }
@@ -208,8 +206,6 @@ public class MusicPlayerActivity extends AppCompatActivity {
                 sname = mySongs.get(position).getName();
                 songnametext.setText(sname);
                 mediaPlayer.start();
-                String endTime = createSongTime(mediaPlayer.getDuration());
-                songendtime.setText(endTime);
                 buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
                 startAnimation(songimageview);
             }
