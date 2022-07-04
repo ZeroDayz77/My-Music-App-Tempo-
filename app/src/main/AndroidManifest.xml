@@ -16,6 +16,9 @@
         android:theme="@style/Theme.Tempo"
         tools:targetApi="31">
         <activity
+            android:name=".PlaylistsActivity"
+            android:exported="false" />
+        <activity
             android:name=".MusicPlayerActivity"
             android:exported="false" />
         <activity

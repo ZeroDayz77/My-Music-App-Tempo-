@@ -22,6 +22,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
 import androidx.appcompat.widget.Toolbar;
 
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.navigation.NavigationBarView;
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.PermissionToken;
 import com.karumi.dexter.listener.PermissionDeniedResponse;
@@ -50,6 +52,31 @@ public class MainActivity extends AppCompatActivity {
 
         listView = findViewById(R.id.listViewSong);
         runtimePermission();
+
+        BottomNavigationView bottomNavigationView=findViewById(R.id.bottomToolBar);
+
+        bottomNavigationView.setSelectedItemId(R.id.songLibraryButton);
+
+        bottomNavigationView.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
+            @Override
+            public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+
+                switch (item.getItemId()) {
+                    case R.id.songLibraryButton:
+                        return true;
+                    case R.id.songPlayingButton:
+                        startActivity(new Intent(getApplicationContext(),MusicPlayerActivity.class));
+                        overridePendingTransition(0,0);
+                        return true;
+                    case R.id.playlistButton:
+                        startActivity(new Intent(getApplicationContext(),PlaylistsActivity.class));
+                        overridePendingTransition(0,0);
+                        return true;
+                }
+
+                return false;
+            }
+        });
 
 
     }

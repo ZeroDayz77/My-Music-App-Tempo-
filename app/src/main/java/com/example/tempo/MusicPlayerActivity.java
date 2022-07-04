@@ -18,6 +18,9 @@ import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.navigation.NavigationBarView;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Random;
@@ -27,6 +30,7 @@ public class MusicPlayerActivity extends AppCompatActivity {
     TextView songnametext, songstarttime, songendtime;
     SeekBar seekbar;
     ImageView songimageview;
+
 
     String sname;
 
@@ -245,13 +249,37 @@ public class MusicPlayerActivity extends AppCompatActivity {
                 startAnimation(songimageview);
             }
         });
+
+        BottomNavigationView bottomNavigationView=findViewById(R.id.bottomToolBar);
+
+        bottomNavigationView.setSelectedItemId(R.id.songPlayingButton);
+
+        bottomNavigationView.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
+            @Override
+            public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+
+                switch (item.getItemId()) {
+                    case R.id.songLibraryButton:
+                        startActivity(new Intent(getApplicationContext(),MainActivity.class));
+                        overridePendingTransition(0,0);
+                        return true;
+                    case R.id.songPlayingButton:
+                        return true;
+                    case R.id.playlistButton:
+                        startActivity(new Intent(getApplicationContext(),PlaylistsActivity.class));
+                        overridePendingTransition(0,0);
+                        return true;
+                }
+                return false;
+            }
+        });
     }
 
     // animation method for song image
     public void startAnimation(View view)
     {
         ObjectAnimator animator = ObjectAnimator.ofFloat(songimageview, "rotation", 0f, 360f);
-        animator.setDuration(3000);
+        animator.setDuration(1000);
         AnimatorSet animatorSet = new AnimatorSet();
         animatorSet.playTogether(animator);
         animatorSet.start();

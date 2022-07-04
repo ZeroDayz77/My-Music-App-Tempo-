@@ -5,22 +5,17 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/music_player_background"
-    tools:context=".MainActivity">
+    tools:context=".PlaylistsActivity">
 
-    <include layout="@layout/appbar" />
-
-    <ListView
-        android:id="@+id/listViewSong"
+    <TextView
+        android:id="@+id/NewPlaylistText"
+        android:gravity="center"
+        android:textColor="@color/light_grey"
+        android:textAlignment="center"
+        android:text="Create a new playlist..."
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_marginTop="56dp"
-        android:layout_marginBottom="56dp"
-        android:divider="@android:color/transparent"
-        android:dividerHeight="10.0sp"
-        android:padding="8dp">
-
-    </ListView>
-
+        android:layout_height="match_parent">
+    </TextView>
 
     <include layout="@layout/bottom_tool_bar" />
 
