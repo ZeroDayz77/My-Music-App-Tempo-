@@ -2,8 +2,10 @@ package com.example.tempo;
 
 import android.Manifest;
 import android.content.Intent;
+import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -15,6 +17,7 @@ import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.media.MediaPlayer;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBar;
@@ -38,6 +41,9 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
     ListView listView;
     String[] items;
+    TextView songduration;
+
+    static MediaPlayer mediaPlayer;
 
     private Toolbar toolbar;
 
@@ -65,7 +71,9 @@ public class MainActivity extends AppCompatActivity {
                     case R.id.songLibraryButton:
                         return true;
                     case R.id.songPlayingButton:
-                        startActivity(new Intent(getApplicationContext(),MusicPlayerActivity.class));
+                        Intent musicPlayerActivity = (new Intent(getApplicationContext(),MusicPlayerActivity.class));
+                        musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                        startActivity(musicPlayerActivity);
                         overridePendingTransition(0,0);
                         return true;
                     case R.id.playlistButton:
@@ -79,6 +87,23 @@ public class MainActivity extends AppCompatActivity {
         });
 
 
+//        songduration = findViewById(R.id.songduration);
+//
+//        String endTime = createSongTime(mediaPlayer.getDuration());
+//        songduration.setText(endTime);
+//
+//        final Handler handler = new Handler();
+//        final int delay = 500;
+//
+//        handler.postDelayed(new Runnable() {
+//            @Override
+//            public void run() {
+//                String endTime = createSongTime(mediaPlayer.getDuration());
+//                songduration.setText(endTime);
+//
+//                handler.postDelayed(this, delay);
+//            }
+//        },delay);
     }
 
 
@@ -242,4 +267,21 @@ public class MainActivity extends AppCompatActivity {
             return myView;
         }
     }
+
+//    public String createSongTime(int songDuration)
+//    {
+//        String time = "";
+//        int min = songDuration/1000/60;
+//        int sec = songDuration/1000%60;
+//
+//        time+=min+":";
+//
+//        if (sec<10)
+//        {
+//            time+="0";
+//        }
+//        time+=sec;
+//
+//        return  time;
+//    }
 }

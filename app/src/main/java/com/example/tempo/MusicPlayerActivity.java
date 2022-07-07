@@ -12,6 +12,7 @@ import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.PersistableBundle;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageView;
@@ -302,4 +303,17 @@ public class MusicPlayerActivity extends AppCompatActivity {
         return  time;
     }
 
+    @Override
+    protected void onSaveInstanceState( Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putString("song_name", sname);
+    }
+
+    @Override
+    protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        sname = savedInstanceState.getString("song_name", sname);
+        songnametext.setText("" + sname);
+
+    }
 }

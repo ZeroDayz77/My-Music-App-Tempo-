@@ -31,7 +31,9 @@ public class PlaylistsActivity extends AppCompatActivity {
                         overridePendingTransition(0,0);
                         return true;
                     case R.id.songPlayingButton:
-                        startActivity(new Intent(getApplicationContext(),MusicPlayerActivity.class));
+                        Intent musicPlayerActivity = (new Intent(getApplicationContext(),MusicPlayerActivity.class));
+                        musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                        startActivity(musicPlayerActivity);
                         overridePendingTransition(0,0);
                         return true;
                     case R.id.playlistButton:

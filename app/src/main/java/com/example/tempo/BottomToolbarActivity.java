@@ -2,6 +2,7 @@ package com.example.tempo;
 
 
 import android.content.Intent;
+import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.view.MenuItem;
 
@@ -14,6 +15,8 @@ import androidx.appcompat.app.AppCompatActivity;
 
 
 public class BottomToolbarActivity extends AppCompatActivity {
+
+    static MediaPlayer mediaPlayer;
 
 
     @Override
@@ -33,8 +36,17 @@ public class BottomToolbarActivity extends AppCompatActivity {
                     case R.id.songLibraryButton:
                         return true;
                     case R.id.songPlayingButton:
-                        startActivity(new Intent(getApplicationContext(),MusicPlayerActivity.class));
-                        overridePendingTransition(0,0);
+                        if (mediaPlayer == null)
+                        {
+                            startActivity(new Intent(getApplicationContext(),MusicPlayerActivity.class));
+                            overridePendingTransition(0,0);
+                        }
+                        else {
+                            Intent musicPlayerActivity = (new Intent(getApplicationContext(), MusicPlayerActivity.class));
+                            musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                            startActivity(musicPlayerActivity);
+                            overridePendingTransition(0, 0);
+                        }
                         return true;
                     case R.id.playlistButton:
                         startActivity(new Intent(getApplicationContext(),PlaylistsActivity.class));
