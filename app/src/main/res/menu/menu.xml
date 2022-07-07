@@ -16,9 +16,7 @@
 
     <item
         android:id="@+id/settings_button"
-        android:orderInCategory="2"
         android:title="Settings"
-        android:visible="true"
         app:showAsAction="never">
 
     </item>

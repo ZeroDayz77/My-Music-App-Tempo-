@@ -1,10 +1,14 @@
 package com.example.tempo;
 
 
+import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
 import android.media.MediaPlayer;
 import android.os.Bundle;
+import android.os.Handler;
 import android.view.MenuItem;
+import android.widget.Toast;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.navigation.NavigationBarView;
@@ -12,6 +16,9 @@ import com.google.android.material.navigation.NavigationBarView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+
+import java.util.Timer;
+import java.util.TimerTask;
 
 
 public class BottomToolbarActivity extends AppCompatActivity {
@@ -36,17 +43,10 @@ public class BottomToolbarActivity extends AppCompatActivity {
                     case R.id.songLibraryButton:
                         return true;
                     case R.id.songPlayingButton:
-                        if (mediaPlayer == null)
-                        {
-                            startActivity(new Intent(getApplicationContext(),MusicPlayerActivity.class));
-                            overridePendingTransition(0,0);
-                        }
-                        else {
                             Intent musicPlayerActivity = (new Intent(getApplicationContext(), MusicPlayerActivity.class));
                             musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
                             startActivity(musicPlayerActivity);
                             overridePendingTransition(0, 0);
-                        }
                         return true;
                     case R.id.playlistButton:
                         startActivity(new Intent(getApplicationContext(),PlaylistsActivity.class));

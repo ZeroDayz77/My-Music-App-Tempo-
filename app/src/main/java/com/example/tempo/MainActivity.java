@@ -2,6 +2,7 @@ package com.example.tempo;
 
 import android.Manifest;
 import android.content.Intent;
+import android.graphics.drawable.shapes.Shape;
 import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Environment;
@@ -37,15 +38,19 @@ import java.io.File;
 import java.lang.reflect.ParameterizedType;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
     ListView listView;
     String[] items;
     TextView songduration;
+    SearchView searchView;
+    customAdapter customAdapter;
 
     static MediaPlayer mediaPlayer;
 
     private Toolbar toolbar;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState){
@@ -56,8 +61,11 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
         getSupportActionBar().setTitle("Tempo");
 
+        searchView = findViewById(R.id.search_button);
+
         listView = findViewById(R.id.listViewSong);
         runtimePermission();
+        //searchSongs();
 
         BottomNavigationView bottomNavigationView=findViewById(R.id.bottomToolBar);
 
@@ -129,31 +137,12 @@ public class MainActivity extends AppCompatActivity {
 
 
         menu.findItem(R.id.search_button).setOnActionExpandListener(onActionExpandListener);
-        SearchView searchView = (SearchView) menu.findItem(R.id.search_button).getActionView();
+        searchView = (SearchView) menu.findItem(R.id.search_button).getActionView();
         searchView.setQueryHint("Name of song...");
         searchView.setIconified(true);
         searchView.onActionViewCollapsed();
 
-
-
         return true;
-    }
-
-
-    // for settings
-    @Override
-    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        switch (item.getItemId())
-        {
-            case R.id.search_button:
-                Toast.makeText(this,  "Search",Toast.LENGTH_SHORT).show();
-                break;
-
-            case R.id.settings_button:
-                Toast.makeText(this,  "Settings",Toast.LENGTH_SHORT).show();
-                break;
-        }
-        return super.onOptionsItemSelected(item);
     }
 
 
@@ -177,6 +166,37 @@ public class MainActivity extends AppCompatActivity {
                         permissionToken.continuePermissionRequest();
                     }
                 }).check();
+    }
+
+    private void searchSongs ()
+    {
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                return false;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String newText)
+            {
+                filter(newText);
+                customAdapter = new customAdapter();
+                listView.setAdapter(customAdapter);
+
+                return true;
+            }
+        });
+    }
+
+    private void filter(String newText) {
+        ArrayList<File> mySongs = findSong(Environment.getExternalStorageDirectory());
+        for (File file: mySongs)
+        {
+            if (mySongs.contains(newText.toLowerCase()))
+            {
+                mySongs.add(file);
+            }
+        }
     }
 
     // this method will find if song files are available to be read ( .wav and .mp3 )
@@ -210,7 +230,7 @@ public class MainActivity extends AppCompatActivity {
         final ArrayList<File> mySongs = findSong(Environment.getExternalStorageDirectory());
 
         items = new String[mySongs.size()];
-        for (int i = 0; i <mySongs.size();i++)
+        for (int i = 0; i < mySongs.size();i++)
         {
             items[i] = mySongs.get(i).getName().toString().replace( ".mp3", "").replace(".wav", "");
         }
@@ -220,7 +240,8 @@ public class MainActivity extends AppCompatActivity {
         /*ArrayAdapter<String> myAdapter = new ArrayAdapter<String>( this, android.R.layout.simple_list_item_1, items);
         listView.setAdapter(myAdapter);*/
 
-        customAdapter customAdapter = new customAdapter();
+
+        customAdapter = new customAdapter();
         listView.setAdapter(customAdapter);
 
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
@@ -234,6 +255,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+
 
     class customAdapter extends BaseAdapter
     {
