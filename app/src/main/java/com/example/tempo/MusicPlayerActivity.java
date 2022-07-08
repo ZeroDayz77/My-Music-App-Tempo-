@@ -42,7 +42,7 @@ public class MusicPlayerActivity extends AppCompatActivity {
     ArrayList<File> mySongs;
     Thread seekbarUpdate;
 
-    private Toolbar toolbar;
+//    private Toolbar toolbar;
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
@@ -59,11 +59,11 @@ public class MusicPlayerActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_music_player);
 
-        toolbar=findViewById(R.id.tempoToolBar);
-        setSupportActionBar(toolbar);
-        getActionBar().setTitle("Now Playing");
-        getActionBar().setDisplayHomeAsUpEnabled(true);
-        getActionBar().setDisplayShowHomeEnabled(true);
+//        toolbar=findViewById(R.id.tempoToolBar);
+//        setSupportActionBar(toolbar);
+//        getActionBar().setTitle("Now Playing");
+//        getActionBar().setDisplayHomeAsUpEnabled(true);
+//        getActionBar().setDisplayShowHomeEnabled(true);
 
         buttonplay = findViewById(R.id.buttonplay);
         skipsongnext = findViewById(R.id.skipsongnext);
