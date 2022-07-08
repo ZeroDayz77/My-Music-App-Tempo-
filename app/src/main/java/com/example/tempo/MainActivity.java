@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.graphics.drawable.shapes.Shape;
 import android.media.MediaPlayer;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -62,6 +63,7 @@ public class MainActivity extends AppCompatActivity {
         getSupportActionBar().setTitle("Tempo");
 
         searchView = findViewById(R.id.search_button);
+        songduration = findViewById(R.id.songduration);
 
         listView = findViewById(R.id.listViewSong);
         runtimePermission();
@@ -94,24 +96,10 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-
-//        songduration = findViewById(R.id.songduration);
+//        mediaPlayer = new MediaPlayer();
 //
 //        String endTime = createSongTime(mediaPlayer.getDuration());
 //        songduration.setText(endTime);
-//
-//        final Handler handler = new Handler();
-//        final int delay = 500;
-//
-//        handler.postDelayed(new Runnable() {
-//            @Override
-//            public void run() {
-//                String endTime = createSongTime(mediaPlayer.getDuration());
-//                songduration.setText(endTime);
-//
-//                handler.postDelayed(this, delay);
-//            }
-//        },delay);
     }
 
 

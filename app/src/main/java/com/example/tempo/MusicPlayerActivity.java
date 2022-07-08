@@ -3,6 +3,7 @@ package com.example.tempo;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatButton;
+import androidx.appcompat.widget.Toolbar;
 
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
@@ -41,6 +42,8 @@ public class MusicPlayerActivity extends AppCompatActivity {
     ArrayList<File> mySongs;
     Thread seekbarUpdate;
 
+    private Toolbar toolbar;
+
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if (item.getItemId()==android.R.id.home)
@@ -56,9 +59,11 @@ public class MusicPlayerActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_music_player);
 
-//        getSupportActionBar().setTitle("Now Playing");
-//        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-//        getSupportActionBar().setDisplayShowHomeEnabled(true);
+        toolbar=findViewById(R.id.tempoToolBar);
+        setSupportActionBar(toolbar);
+        getActionBar().setTitle("Now Playing");
+        getActionBar().setDisplayHomeAsUpEnabled(true);
+        getActionBar().setDisplayShowHomeEnabled(true);
 
         buttonplay = findViewById(R.id.buttonplay);
         skipsongnext = findViewById(R.id.skipsongnext);
@@ -118,8 +123,8 @@ public class MusicPlayerActivity extends AppCompatActivity {
             }
         };
 
-        seekbar.setMax(mediaPlayer.getDuration());
         seekbarUpdate.start();
+        seekbar.setMax(mediaPlayer.getDuration());
         seekbar.getProgressDrawable().setColorFilter(getResources().getColor(R.color.white), PorterDuff.Mode.MULTIPLY);
         seekbar.getThumb().setColorFilter(getResources().getColor(R.color.teal_700), PorterDuff.Mode.SRC_IN);
 
