@@ -106,8 +106,7 @@ public class MainActivity extends AppCompatActivity {
     // method for toolbar menu
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.menu, menu);
+        getMenuInflater().inflate(R.menu.menu, menu);
 
 
         // for the search feature
