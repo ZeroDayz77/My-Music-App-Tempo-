@@ -31,6 +31,8 @@ public class BottomToolbarActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.bottom_tool_bar);
 
+        //allows for navigation between activities.
+
         BottomNavigationView bottomNavigationView=findViewById(R.id.bottomToolBar);
 
         bottomNavigationView.setSelectedItemId(R.id.songLibraryButton);

@@ -17,6 +17,8 @@ public class PlaylistsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_playlists);
 
+        //allows for navigation between activities. But crashes the app on pressed, does not reopen the activity on the saved state as I expected.
+
         BottomNavigationView bottomNavigationView=findViewById(R.id.bottomToolBar);
 
         bottomNavigationView.setSelectedItemId(R.id.playlistButton);

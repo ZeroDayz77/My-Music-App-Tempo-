@@ -78,12 +78,16 @@ public class MusicPlayerActivity extends AppCompatActivity {
 
         seekbar = findViewById(R.id.seekbar);
 
+        // just a check before hand on hte media player
+
         if (mediaPlayer != null)
         {
             mediaPlayer.stop();
             mediaPlayer.release();
         }
 
+
+        //to link to the main activity and parse the song information.
         Intent i = getIntent();
         Bundle bundle = i.getExtras();
 
@@ -123,6 +127,8 @@ public class MusicPlayerActivity extends AppCompatActivity {
             }
         };
 
+        //custom code for the seekbar to dynamically change it per song, though it does not fully work as intended.
+
         seekbarUpdate.start();
         seekbar.setMax(mediaPlayer.getDuration());
         seekbar.getProgressDrawable().setColorFilter(getResources().getColor(R.color.white), PorterDuff.Mode.MULTIPLY);
@@ -145,6 +151,8 @@ public class MusicPlayerActivity extends AppCompatActivity {
             }
         });
 
+        // displays the song duration and current song time on the music player activity.
+
         String endTime = createSongTime(mediaPlayer.getDuration());
         songendtime.setText(endTime);
 
@@ -164,7 +172,7 @@ public class MusicPlayerActivity extends AppCompatActivity {
             }
         },delay);
 
-
+        // when play button is pressed
 
         buttonplay.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -189,6 +197,8 @@ public class MusicPlayerActivity extends AppCompatActivity {
             }
         });
 
+        // when skip next is pressed
+
         skipsongnext.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -205,6 +215,8 @@ public class MusicPlayerActivity extends AppCompatActivity {
             }
         });
 
+        // when skip previous is pressed
+
         skipsongprev.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -220,6 +232,8 @@ public class MusicPlayerActivity extends AppCompatActivity {
                 startAnimation(songimageview);
             }
         });
+
+        // when shuffle is pressed, causes crashes to the program, not fully sure as to why.
 
         buttonshuffle.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -241,6 +255,8 @@ public class MusicPlayerActivity extends AppCompatActivity {
             }
         });
 
+        // when repeat is pressed, does not work as intended as it doesn't repeat the current song and is not a toggle, does not crash the program.
+
         buttonrepeat.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -255,6 +271,8 @@ public class MusicPlayerActivity extends AppCompatActivity {
                 startAnimation(songimageview);
             }
         });
+
+        //allows for navigation between activities.
 
         BottomNavigationView bottomNavigationView=findViewById(R.id.bottomToolBar);
 
@@ -291,6 +309,7 @@ public class MusicPlayerActivity extends AppCompatActivity {
         animatorSet.start();
     }
 
+    // the calculation to display the time duration in minutes and seconds.
     public String createSongTime(int songDuration)
     {
         String time = "";

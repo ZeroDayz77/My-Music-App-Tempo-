@@ -69,6 +69,8 @@ public class MainActivity extends AppCompatActivity {
         runtimePermission();
         //searchSongs();
 
+        //allows for navigation between activities.
+
         BottomNavigationView bottomNavigationView=findViewById(R.id.bottomToolBar);
 
         bottomNavigationView.setSelectedItemId(R.id.songLibraryButton);
@@ -96,6 +98,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // unsued code to have the duration of each song displayed on the song_list_names layout. Did not work as intended and ran out of time to troubleshoot.
+
 //        mediaPlayer = new MediaPlayer();
 //
 //        String endTime = createSongTime(mediaPlayer.getDuration());
@@ -103,7 +107,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    // method for toolbar menu
+    // method for toolbar settings menu as well as cosmetic search feature as I did not solve the issues for the song search function.
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.menu, menu);
@@ -133,7 +137,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    // this method will ask on first runtime for permission to access and read phone's internal storage.
+    // this method will ask on first runtime for permission to access and read phone's internal or external storage. ( this issues apparently differs per device )
     public void runtimePermission()
     {
         Dexter.withContext(this).withPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
@@ -155,6 +159,8 @@ public class MainActivity extends AppCompatActivity {
                 }).check();
     }
 
+
+    // unused function that didn't work as intended and caused crashes possibly due to not having a thread to handle this separate task.
     private void searchSongs ()
     {
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
@@ -175,6 +181,8 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+
+    // filter function for the search above.
     private void filter(String newText) {
         ArrayList<File> mySongs = findSong(Environment.getExternalStorageDirectory());
         for (File file: mySongs)
@@ -243,7 +251,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-
+    // custom adapter used to display the songs.
     class customAdapter extends BaseAdapter
     {
 
@@ -276,6 +284,9 @@ public class MainActivity extends AppCompatActivity {
             return myView;
         }
     }
+
+
+    // unused code for the display of time duration of the songs.
 
 //    public String createSongTime(int songDuration)
 //    {
