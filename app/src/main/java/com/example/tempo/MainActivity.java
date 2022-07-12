@@ -222,7 +222,13 @@ public class MainActivity extends AppCompatActivity {
     // this method will display only mp3 and wav songs and will display the song name using the customAdapter object below.
     void displaySongs ()
     {
-        final ArrayList<File> mySongs = findSong(Environment.getExternalStorageDirectory());
+        // this worked for my phone to get internal storage.
+        String extFilePath = "/storage/595E-F616/Music";
+        File myFiles = new File(extFilePath);
+        final ArrayList<File> mySongs = findSong(myFiles);
+
+        //this one line is what I had used initially as a default to get a general external storage.
+//        final ArrayList<File> mySongs = findSong(Environment.getExternalStorageDirectory());
 
         items = new String[mySongs.size()];
         for (int i = 0; i < mySongs.size();i++)
