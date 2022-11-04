@@ -11,6 +11,7 @@ import android.os.Handler;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
@@ -26,8 +27,10 @@ import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
 import androidx.appcompat.widget.Toolbar;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationBarView;
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.PermissionToken;
@@ -52,10 +55,24 @@ public class MainActivity extends AppCompatActivity {
 
     private Toolbar toolbar;
 
+    RecyclerView recyclerView;
+    FloatingActionButton NewPlaylistButton;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState){
         super.onCreate(savedInstanceState);
+
+        recyclerView = findViewById(R.id.recyclerView);
+        NewPlaylistButton = findViewById(R.id.NewPlaylistButton);
+        NewPlaylistButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent(MainActivity.this, PlaylistAdd.class);
+                startActivity(intent);
+            }
+        });
+
         setContentView(R.layout.activity_main);
 
         toolbar=findViewById(R.id.tempoToolBar);

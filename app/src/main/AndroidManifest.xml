@@ -16,6 +16,11 @@
         android:theme="@style/Theme.Tempo"
         tools:targetApi="31">
         <activity
+            android:name=".PlaylistAdd"
+            android:label="Add Song"
+            android:parentActivityName=".MainActivity"
+            android:exported="false" />
+        <activity
             android:name=".PlaylistsActivity"
             android:exported="false" />
         <activity
