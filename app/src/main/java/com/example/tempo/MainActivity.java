@@ -65,13 +65,13 @@ public class MainActivity extends AppCompatActivity {
 
         recyclerView = findViewById(R.id.recyclerView);
         NewPlaylistButton = findViewById(R.id.NewPlaylistButton);
-        NewPlaylistButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Intent intent = new Intent(MainActivity.this, PlaylistAdd.class);
-                startActivity(intent);
-            }
-        });
+//        NewPlaylistButton.setOnClickListener(new View.OnClickListener() {
+//            @Override
+//            public void onClick(View view) {
+//                Intent intent = new Intent(MainActivity.this, PlaylistAdd.class);
+//                startActivity(intent);
+//            }
+//        });
 
         setContentView(R.layout.activity_main);
 
