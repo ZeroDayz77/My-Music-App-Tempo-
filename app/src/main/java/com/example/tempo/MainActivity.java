@@ -1,10 +1,16 @@
 package com.example.tempo;
 
 import android.Manifest;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.drawable.shapes.Shape;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -27,8 +33,11 @@ import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.example.tempo.Services.OnClearRecentService;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationBarView;
@@ -44,23 +53,27 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements Playable {
     ListView listView;
     String[] items;
     TextView songduration;
     SearchView searchView;
     customAdapter customAdapter;
 
+    ArrayList<File> mySongs;
+
     static MediaPlayer mediaPlayer;
 
     private Toolbar toolbar;
+
+    NotificationManager notificationManager;
 
     RecyclerView recyclerView;
     FloatingActionButton NewPlaylistButton;
 
 
     @Override
-    protected void onCreate(Bundle savedInstanceState){
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         recyclerView = findViewById(R.id.recyclerView);
@@ -73,9 +86,15 @@ public class MainActivity extends AppCompatActivity {
 //            }
 //        });
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            createChannel();
+            registerReceiver(broadcastReceiver, new IntentFilter("SONG_CURRENTSONG"));
+            startService(new Intent(getBaseContext(), OnClearRecentService.class));
+        }
+
         setContentView(R.layout.activity_main);
 
-        toolbar=findViewById(R.id.tempoToolBar);
+        toolbar = findViewById(R.id.tempoToolBar);
         setSupportActionBar(toolbar);
         getSupportActionBar().setTitle("Tempo");
 
@@ -88,7 +107,7 @@ public class MainActivity extends AppCompatActivity {
 
         //allows for navigation between activities.
 
-        BottomNavigationView bottomNavigationView=findViewById(R.id.bottomToolBar);
+        BottomNavigationView bottomNavigationView = findViewById(R.id.bottomToolBar);
 
         bottomNavigationView.setSelectedItemId(R.id.songLibraryButton);
 
@@ -100,14 +119,14 @@ public class MainActivity extends AppCompatActivity {
                     case R.id.songLibraryButton:
                         return true;
                     case R.id.songPlayingButton:
-                        Intent musicPlayerActivity = (new Intent(getApplicationContext(),MusicPlayerActivity.class));
+                        Intent musicPlayerActivity = (new Intent(getApplicationContext(), MusicPlayerActivity.class));
                         musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
                         startActivity(musicPlayerActivity);
-                        overridePendingTransition(0,0);
+                        overridePendingTransition(0, 0);
                         return true;
                     case R.id.playlistButton:
-                        startActivity(new Intent(getApplicationContext(),PlaylistsActivity.class));
-                        overridePendingTransition(0,0);
+                        startActivity(new Intent(getApplicationContext(), PlaylistsActivity.class));
+                        overridePendingTransition(0, 0);
                         return true;
                 }
 
@@ -121,6 +140,21 @@ public class MainActivity extends AppCompatActivity {
 //
 //        String endTime = createSongTime(mediaPlayer.getDuration());
 //        songduration.setText(endTime);
+    }
+
+    private void createChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(CreateMusicNotification.CHANNEL_ID, "notification", NotificationManager.IMPORTANCE_LOW);
+            notificationManager = getSystemService(NotificationManager.class);
+
+            if (notificationManager != null) {
+                notificationManager.createNotificationChannel(channel);
+            }
+
+            channel.enableVibration(false);
+            channel.setSound(null, null);
+            channel.setShowBadge(false);
+        }
     }
 
 
@@ -155,8 +189,7 @@ public class MainActivity extends AppCompatActivity {
 
 
     // this method will ask on first runtime for permission to access and read phone's internal or external storage. ( this issues apparently differs per device )
-    public void runtimePermission()
-    {
+    public void runtimePermission() {
         Dexter.withContext(this).withPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
                 .withListener(new PermissionListener() {
                     @Override
@@ -178,8 +211,7 @@ public class MainActivity extends AppCompatActivity {
 
 
     // unused function that didn't work as intended and caused crashes possibly due to not having a thread to handle this separate task.
-    private void searchSongs ()
-    {
+    private void searchSongs() {
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String query) {
@@ -187,8 +219,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public boolean onQueryTextChange(String newText)
-            {
+            public boolean onQueryTextChange(String newText) {
                 filter(newText);
                 customAdapter = new customAdapter();
                 listView.setAdapter(customAdapter);
@@ -202,10 +233,8 @@ public class MainActivity extends AppCompatActivity {
     // filter function for the search above.
     private void filter(String newText) {
         ArrayList<File> mySongs = findSong(Environment.getExternalStorageDirectory());
-        for (File file: mySongs)
-        {
-            if (mySongs.contains(newText.toLowerCase()))
-            {
+        for (File file : mySongs) {
+            if (mySongs.contains(newText.toLowerCase())) {
                 mySongs.add(file);
             }
         }
@@ -215,7 +244,7 @@ public class MainActivity extends AppCompatActivity {
     public ArrayList<File> findSong(File file) {
         ArrayList arrayList = new ArrayList();
         File[] files = file.listFiles();
-        if(files != null) {
+        if (files != null) {
             for (File singlefile : files) {
                 if (singlefile.isDirectory() && !singlefile.isHidden()) {
                     arrayList.addAll(findSong(singlefile));
@@ -224,9 +253,7 @@ public class MainActivity extends AppCompatActivity {
                         arrayList.add(singlefile);
                     } else if (singlefile.getName().endsWith(".mp3")) {
                         arrayList.add(singlefile);
-                    }
-                    else if (singlefile.getName().startsWith("AUD") || singlefile.getName().startsWith("."))
-                    {
+                    } else if (singlefile.getName().startsWith("AUD") || singlefile.getName().startsWith(".")) {
                         return arrayList;
                     }
                 }
@@ -237,20 +264,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // this method will display only mp3 and wav songs and will display the song name using the customAdapter object below.
-    void displaySongs ()
-    {
+    void displaySongs() {
         // this worked for my phone to get internal storage.
         String extFilePath = "/storage/595E-F616/Music";
         File myFiles = new File(extFilePath);
-        final ArrayList<File> mySongs = findSong(myFiles);
+        mySongs = findSong(myFiles);
 
         //this one line is what I had used initially as a default to get a general external storage.
 //        final ArrayList<File> mySongs = findSong(Environment.getExternalStorageDirectory());
 
         items = new String[mySongs.size()];
-        for (int i = 0; i < mySongs.size();i++)
-        {
-            items[i] = mySongs.get(i).getName().toString().replace( ".mp3", "").replace(".wav", "");
+        for (int i = 0; i < mySongs.size(); i++) {
+            items[i] = mySongs.get(i).getName().toString().replace(".mp3", "").replace(".wav", "");
         }
 
         // this adapter was used initially to display the names of the songs without any styling.
@@ -270,13 +295,46 @@ public class MainActivity extends AppCompatActivity {
                         .putExtra("songs", mySongs)
                         .putExtra("songname", songName)
                         .putExtra("pos", i));
+
+                CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(MusicPlayerActivity.position).getName().toString().replace(".mp3", "").replace(".wav", ""), R.drawable.ic_play_icon, MusicPlayerActivity.position, mySongs.size());
+
+//                NotificationCompat.Builder builder = new NotificationCompat.Builder(MainActivity.this, "notification");
+//                builder.setContentTitle(getString(R.string.app_name));
+//                builder.setContentText("Currently Playing: " + mySongs.get(i).getName().toString().replace( ".mp3", "").replace(".wav", ""));
+//                builder.setSmallIcon(R.drawable.ic_music);
+//                builder.setSilent(true);
+//                builder.setAutoCancel(true);
+//
+//                NotificationManagerCompat managerCompat = NotificationManagerCompat.from(MainActivity.this);
+//                managerCompat.notify(1,builder.build());
             }
         });
     }
 
+    BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getExtras().getString("actionname");
+
+            switch (action) {
+                case CreateMusicNotification.SKIPSONGPREV:
+                    onButtonPrevious();
+                    break;
+                case CreateMusicNotification.BUTTONPLAY:
+                    if (mediaPlayer.isPlaying())
+                        onButtonPause();
+                    else
+                        onButtonPlay();
+                    break;
+                case CreateMusicNotification.SKIPSONGNEXT:
+                    onButtonNext();
+                    break;
+            }
+        }
+    };
+
     // custom adapter used to display the songs.
-    class customAdapter extends BaseAdapter
-    {
+    class customAdapter extends BaseAdapter {
 
         @Override
         public int getCount() {
@@ -308,6 +366,43 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    public void onButtonPrevious() {
+        MusicPlayerActivity.position--;
+        CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(MusicPlayerActivity.position).getName().toString().replace(".mp3", "").replace(".wav", ""),
+                R.drawable.ic_pause_icon, MusicPlayerActivity.position, mySongs.size() - 1);
+    }
+
+    @Override
+    public void onButtonPlay() {
+        CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(MusicPlayerActivity.position).getName().toString().replace(".mp3", "").replace(".wav", ""),
+                R.drawable.ic_pause_icon, MusicPlayerActivity.position, mySongs.size() - 1);
+    }
+
+    @Override
+    public void onButtonPause() {
+        CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(MusicPlayerActivity.position).getName().toString().replace(".mp3", "").replace(".wav", ""),
+                R.drawable.ic_play_icon, MusicPlayerActivity.position, mySongs.size() - 1);
+    }
+
+    @Override
+    public void onButtonNext() {
+        MusicPlayerActivity.position++;
+        CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(MusicPlayerActivity.position).getName().toString().replace(".mp3", "").replace(".wav", ""),
+                R.drawable.ic_pause_icon, MusicPlayerActivity.position, mySongs.size() - 1);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
+            notificationManager.cancelAll();
+        }
+
+        unregisterReceiver(broadcastReceiver);
+    }
+}
+
 
     // unused code for the display of time duration of the songs.
 
@@ -327,4 +422,4 @@ public class MainActivity extends AppCompatActivity {
 //
 //        return  time;
 //    }
-}
+

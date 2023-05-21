@@ -4,13 +4,20 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatButton;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.PorterDuff;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.PersistableBundle;
@@ -27,19 +34,19 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Random;
 
-public class MusicPlayerActivity extends AppCompatActivity {
+public class MusicPlayerActivity extends AppCompatActivity implements Playable {
     AppCompatButton buttonplay, skipsongnext, skipsongprev, buttonshuffle, buttonrepeat;
     TextView songnametext, songstarttime, songendtime;
     SeekBar seekbar;
     ImageView songimageview;
 
-
     String sname;
+    NotificationManager notificationManager;
 
     public static final String EXTRA_NAME = "song_name";
     static MediaPlayer mediaPlayer;
-    int position;
-    ArrayList<File> mySongs;
+    public static int position;
+    public static ArrayList<File> mySongs;
     Thread seekbarUpdate;
 
 //    private Toolbar toolbar;
@@ -78,7 +85,7 @@ public class MusicPlayerActivity extends AppCompatActivity {
 
         seekbar = findViewById(R.id.seekbar);
 
-        // just a check before hand on hte media player
+        // just a check before hand on the media player
 
         if (mediaPlayer != null)
         {
@@ -86,6 +93,14 @@ public class MusicPlayerActivity extends AppCompatActivity {
             mediaPlayer.release();
         }
 
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
+            NotificationChannel channel = new NotificationChannel("notification","notification", NotificationManager.IMPORTANCE_LOW);
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            channel.enableVibration(false);
+            channel.setSound(null, null);
+            channel.setShowBadge(false);
+            manager.createNotificationChannel(channel);
+        }
 
         //to link to the main activity and parse the song information.
         Intent i = getIntent();
@@ -97,7 +112,7 @@ public class MusicPlayerActivity extends AppCompatActivity {
 
         songnametext.setSelected(true);
         Uri uri = Uri.parse(mySongs.get(position).toString());
-        sname = mySongs.get(position).getName();
+        sname = mySongs.get(position).getName().toString().replace( ".mp3", "").replace(".wav", "");
 
         songnametext.setText(sname);
 
@@ -172,6 +187,7 @@ public class MusicPlayerActivity extends AppCompatActivity {
             }
         },delay);
 
+
         // when play button is pressed
 
         buttonplay.setOnClickListener(new View.OnClickListener() {
@@ -180,10 +196,14 @@ public class MusicPlayerActivity extends AppCompatActivity {
                 if (mediaPlayer.isPlaying())
                 {
                     buttonplay.setBackgroundResource(R.drawable.ic_play_icon);
+                    CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,R.drawable.ic_play_icon, position, mySongs.size());
                     mediaPlayer.pause();
+                    onButtonPause();
                 } else {
                     buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
+                    CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,R.drawable.ic_play_icon, position, mySongs.size());
                     mediaPlayer.start();
+                    onButtonPlay();
                 }
             }
         });
@@ -207,11 +227,24 @@ public class MusicPlayerActivity extends AppCompatActivity {
                 position = ((position+1)%mySongs.size());
                 Uri u = Uri.parse(mySongs.get(position).toString());
                 mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                sname = mySongs.get(position).getName();
+                sname = mySongs.get(position).getName().toString().replace( ".mp3", "").replace(".wav", "");
                 songnametext.setText(sname);
                 mediaPlayer.start();
                 buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
                 startAnimation(songimageview);
+
+                onButtonNext();
+
+//                NotificationCompat.Builder builder = new NotificationCompat.Builder(MusicPlayerActivity.this, "notification");
+//                builder.setContentTitle(getString(R.string.app_name));
+//                builder.setContentText("Currently Playing: " + sname);
+//                builder.setSmallIcon(R.drawable.ic_music);
+//                builder.setSilent(true);
+//                builder.setAutoCancel(true);
+//
+//                NotificationManagerCompat managerCompat = NotificationManagerCompat.from(MusicPlayerActivity.this);
+//                managerCompat.notify(1,builder.build());
+
             }
         });
 
@@ -225,11 +258,23 @@ public class MusicPlayerActivity extends AppCompatActivity {
                 position = ((position-1)<0)?(mySongs.size()-1):(position-1);
                 Uri u = Uri.parse(mySongs.get(position).toString());
                 mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                sname = mySongs.get(position).getName();
+                sname = mySongs.get(position).getName().toString().replace( ".mp3", "").replace(".wav", "");
                 songnametext.setText(sname);
                 mediaPlayer.start();
                 buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
                 startAnimation(songimageview);
+
+                onButtonPrevious();
+//
+//                NotificationCompat.Builder builder = new NotificationCompat.Builder(MusicPlayerActivity.this, "notification");
+//                builder.setContentTitle(getString(R.string.app_name));
+//                builder.setContentText("Currently Playing: " + sname);
+//                builder.setSmallIcon(R.drawable.ic_music);
+//                builder.setSilent(true);
+//                builder.setAutoCancel(true);
+//
+//                NotificationManagerCompat managerCompat = NotificationManagerCompat.from(MusicPlayerActivity.this);
+//                managerCompat.notify(1,builder.build());
             }
         });
 
@@ -245,12 +290,24 @@ public class MusicPlayerActivity extends AppCompatActivity {
                 position = (position+random.nextInt(upperbound));
                 Uri u = Uri.parse(mySongs.get(position).toString());
                 mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                sname = mySongs.get(position).getName();
+                sname = mySongs.get(position).getName().toString().replace( ".mp3", "").replace(".wav", "");
                 songnametext.setText(sname);
                 mediaPlayer.start();
                 buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
                 buttonshuffle.setBackgroundResource(R.drawable.ic_shuffle_selected_icon);
                 startAnimation(songimageview);
+
+                CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,R.drawable.ic_play_icon, position, mySongs.size());
+
+//                NotificationCompat.Builder builder = new NotificationCompat.Builder(MusicPlayerActivity.this, "notification");
+//                builder.setContentTitle(getString(R.string.app_name));
+//                builder.setContentText("Currently Playing: " + sname);
+//                builder.setSmallIcon(R.drawable.ic_music);
+//                builder.setSilent(true);
+//                builder.setAutoCancel(true);
+//
+//                NotificationManagerCompat managerCompat = NotificationManagerCompat.from(MusicPlayerActivity.this);
+//                managerCompat.notify(1,builder.build());
 
             }
         });
@@ -264,11 +321,23 @@ public class MusicPlayerActivity extends AppCompatActivity {
                 mediaPlayer.release();
                 Uri u = Uri.parse(mySongs.get(position).toString());
                 mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                sname = mySongs.get(position).getName();
+                sname = mySongs.get(position).getName().toString().replace( ".mp3", "").replace(".wav", "");
                 songnametext.setText(sname);
                 mediaPlayer.start();
                 buttonrepeat.setBackgroundResource(R.drawable.ic_repeat_selected_icon);
                 startAnimation(songimageview);
+
+                CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,R.drawable.ic_play_icon, position, mySongs.size());
+
+//                NotificationCompat.Builder builder = new NotificationCompat.Builder(MusicPlayerActivity.this, "notification");
+//                builder.setContentTitle(getString(R.string.app_name));
+//                builder.setContentText("Currently Playing: " + sname);
+//                builder.setSmallIcon(R.drawable.ic_music);
+//                builder.setSilent(true);
+//                builder.setAutoCancel(true);
+//
+//                NotificationManagerCompat managerCompat = NotificationManagerCompat.from(MusicPlayerActivity.this);
+//                managerCompat.notify(1,builder.build());
             }
         });
 
@@ -299,6 +368,28 @@ public class MusicPlayerActivity extends AppCompatActivity {
         });
     }
 
+    BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getExtras().getString("actionname");
+
+            switch (action) {
+                case CreateMusicNotification.SKIPSONGPREV:
+                    onButtonPrevious();
+                    break;
+                case CreateMusicNotification.BUTTONPLAY:
+                    if (mediaPlayer.isPlaying())
+                        onButtonPause();
+                    else
+                        onButtonPlay();
+                    break;
+                case CreateMusicNotification.SKIPSONGNEXT:
+                    onButtonNext();
+                    break;
+            }
+        }
+    };
+
     // animation method for song image
     public void startAnimation(View view)
     {
@@ -325,5 +416,41 @@ public class MusicPlayerActivity extends AppCompatActivity {
         time+=sec;
 
         return  time;
+    }
+
+    @Override
+    public void onButtonPrevious() {
+        position--;
+        CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,
+                R.drawable.ic_pause_icon, position, mySongs.size() - 1);
+    }
+
+    @Override
+    public void onButtonPlay() {
+        CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,
+                R.drawable.ic_pause_icon, position, mySongs.size() - 1);
+    }
+
+    @Override
+    public void onButtonPause() {
+        CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,
+                R.drawable.ic_play_icon, position, mySongs.size() - 1);
+    }
+
+    @Override
+    public void onButtonNext() {
+        position++;
+        CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,
+                R.drawable.ic_pause_icon, position, mySongs.size() - 1);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
+            notificationManager.cancelAll();
+        }
+
+        unregisterReceiver(broadcastReceiver);
     }
 }
