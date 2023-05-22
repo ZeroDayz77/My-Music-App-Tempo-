@@ -75,6 +75,8 @@ public class MainActivity extends AppCompatActivity implements Playable {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setTheme(R.style.Theme_Tempo_NoActionBar);
+        setContentView(R.layout.activity_main);
 
         recyclerView = findViewById(R.id.recyclerView);
         NewPlaylistButton = findViewById(R.id.NewPlaylistButton);
@@ -91,8 +93,6 @@ public class MainActivity extends AppCompatActivity implements Playable {
             registerReceiver(broadcastReceiver, new IntentFilter("SONG_CURRENTSONG"));
             startService(new Intent(getBaseContext(), OnClearRecentService.class));
         }
-
-        setContentView(R.layout.activity_main);
 
         toolbar = findViewById(R.id.tempoToolBar);
         setSupportActionBar(toolbar);
@@ -119,6 +119,18 @@ public class MainActivity extends AppCompatActivity implements Playable {
                     case R.id.songLibraryButton:
                         return true;
                     case R.id.songPlayingButton:
+
+                        if(mediaPlayer == null)
+                        {
+                            Context context = getApplicationContext();
+                            CharSequence text = "No song currently playing, please choose a song...";
+                            int duration = Toast.LENGTH_SHORT;
+
+                            Toast toast = Toast.makeText(context, text, duration);
+                            toast.show();
+                            return false;
+                        }
+
                         Intent musicPlayerActivity = (new Intent(getApplicationContext(), MusicPlayerActivity.class));
                         musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
                         startActivity(musicPlayerActivity);
@@ -295,6 +307,7 @@ public class MainActivity extends AppCompatActivity implements Playable {
                         .putExtra("songs", mySongs)
                         .putExtra("songname", songName)
                         .putExtra("pos", i));
+                overridePendingTransition(0, 0);
 
                 CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(MusicPlayerActivity.position).getName().toString().replace(".mp3", "").replace(".wav", ""), R.drawable.ic_play_icon, MusicPlayerActivity.position, mySongs.size());
 

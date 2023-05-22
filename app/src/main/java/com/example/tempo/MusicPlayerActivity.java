@@ -21,6 +21,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.PersistableBundle;
+import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageView;
@@ -49,7 +50,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
     public static ArrayList<File> mySongs;
     Thread seekbarUpdate;
 
-//    private Toolbar toolbar;
+    private Toolbar toolbar;
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
@@ -66,11 +67,11 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_music_player);
 
-//        toolbar=findViewById(R.id.tempoToolBar);
-//        setSupportActionBar(toolbar);
-//        getActionBar().setTitle("Now Playing");
-//        getActionBar().setDisplayHomeAsUpEnabled(true);
-//        getActionBar().setDisplayShowHomeEnabled(true);
+        toolbar=findViewById(R.id.tempoToolBar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setTitle("Now Playing");
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+//        getSupportActionBar().setDisplayShowHomeEnabled(true);
 
         buttonplay = findViewById(R.id.buttonplay);
         skipsongnext = findViewById(R.id.skipsongnext);
@@ -105,6 +106,9 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         //to link to the main activity and parse the song information.
         Intent i = getIntent();
         Bundle bundle = i.getExtras();
+        
+        if(bundle == null)
+            Log.d("TAG", "Bundle is null");
 
         mySongs = (ArrayList) bundle.getParcelableArrayList("songs");
         String songName = i.getStringExtra("songname");
@@ -444,13 +448,13 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
                 R.drawable.ic_pause_icon, position, mySongs.size() - 1);
     }
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
-            notificationManager.cancelAll();
-        }
-
-        unregisterReceiver(broadcastReceiver);
-    }
+//    @Override
+//    protected void onDestroy() {
+//        super.onDestroy();
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
+//            notificationManager.cancelAll();
+//        }
+//
+//        unregisterReceiver(broadcastReceiver);
+//    }
 }

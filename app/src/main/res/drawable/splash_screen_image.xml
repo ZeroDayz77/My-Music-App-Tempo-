@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:drawable="@color/black" />
+
+    <item android:drawable="@drawable/tempo_app_splash_icon"
+        android:gravity="center"
+        android:width="300px"
+        android:height="300px"/>
+
+</layer-list>
