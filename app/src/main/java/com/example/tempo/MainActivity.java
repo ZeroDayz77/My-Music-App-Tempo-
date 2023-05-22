@@ -75,6 +75,7 @@ public class MainActivity extends AppCompatActivity implements Playable {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         setTheme(R.style.Theme_Tempo_NoActionBar);
         setContentView(R.layout.activity_main);
 
@@ -134,7 +135,7 @@ public class MainActivity extends AppCompatActivity implements Playable {
                         Intent musicPlayerActivity = (new Intent(getApplicationContext(), MusicPlayerActivity.class));
                         musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
                         startActivity(musicPlayerActivity);
-                        overridePendingTransition(0, 0);
+                        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
                         return true;
                     case R.id.playlistButton:
                         startActivity(new Intent(getApplicationContext(), PlaylistsActivity.class));
@@ -413,6 +414,19 @@ public class MainActivity extends AppCompatActivity implements Playable {
         }
 
         unregisterReceiver(broadcastReceiver);
+    }
+
+
+    @Override
+    public boolean onNavigateUp() {
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+        return super.onNavigateUp();
+    }
+
+    @Override
+    public void onBackPressed() {
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+        super.onBackPressed();
     }
 }
 

@@ -50,6 +50,8 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
     public static ArrayList<File> mySongs;
     Thread seekbarUpdate;
 
+    public static Bundle bundle;
+
     private Toolbar toolbar;
 
     @Override
@@ -105,10 +107,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
 
         //to link to the main activity and parse the song information.
         Intent i = getIntent();
-        Bundle bundle = i.getExtras();
-        
-        if(bundle == null)
-            Log.d("TAG", "Bundle is null");
+        bundle = i.getExtras();
 
         mySongs = (ArrayList) bundle.getParcelableArrayList("songs");
         String songName = i.getStringExtra("songname");
@@ -423,6 +422,20 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
     }
 
     @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        Bundle currentSong = bundle;
+        outState.putBundle("currentSongData", currentSong);
+    }
+
+    @Override
+    protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        Bundle restoredData = savedInstanceState.getBundle("currentSongData");
+        bundle = restoredData;
+    }
+
+    @Override
     public void onButtonPrevious() {
         position--;
         CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,
@@ -446,6 +459,18 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         position++;
         CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,
                 R.drawable.ic_pause_icon, position, mySongs.size() - 1);
+    }
+
+    @Override
+    public boolean onNavigateUp() {
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+        return super.onNavigateUp();
+    }
+
+    @Override
+    public void onBackPressed() {
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+        super.onBackPressed();
     }
 
 //    @Override
