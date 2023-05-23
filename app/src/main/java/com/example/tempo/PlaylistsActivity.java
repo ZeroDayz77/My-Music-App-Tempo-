@@ -2,6 +2,7 @@ package com.example.tempo;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 
 import android.content.Context;
 import android.content.Intent;
@@ -16,11 +17,18 @@ import com.google.android.material.navigation.NavigationBarView;
 public class PlaylistsActivity extends AppCompatActivity {
 
     static MediaPlayer mediaPlayer;
+    private Toolbar toolbar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        overridePendingTransition(0, 0);
         setContentView(R.layout.activity_playlists);
+
+        toolbar=findViewById(R.id.tempoToolBar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setTitle("Playlists");
+//        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
 
         //allows for navigation between activities. But crashes the app on pressed, does not reopen the activity on the saved state as I expected.
 

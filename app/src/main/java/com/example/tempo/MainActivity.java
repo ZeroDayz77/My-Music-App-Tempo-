@@ -75,7 +75,7 @@ public class MainActivity extends AppCompatActivity implements Playable {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+        overridePendingTransition(0, 0);
         setTheme(R.style.Theme_Tempo_NoActionBar);
         setContentView(R.layout.activity_main);
 
@@ -121,8 +121,7 @@ public class MainActivity extends AppCompatActivity implements Playable {
                         return true;
                     case R.id.songPlayingButton:
 
-                        if(mediaPlayer == null)
-                        {
+                        if (mediaPlayer == null) {
                             Context context = getApplicationContext();
                             CharSequence text = "No song currently playing, please choose a song...";
                             int duration = Toast.LENGTH_SHORT;
@@ -409,7 +408,7 @@ public class MainActivity extends AppCompatActivity implements Playable {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notificationManager.cancelAll();
         }
 
@@ -428,10 +427,9 @@ public class MainActivity extends AppCompatActivity implements Playable {
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         super.onBackPressed();
     }
-}
 
 
-    // unused code for the display of time duration of the songs.
+//     unused code for the display of time duration of the songs.
 
 //    public String createSongTime(int songDuration)
 //    {
@@ -449,4 +447,4 @@ public class MainActivity extends AppCompatActivity implements Playable {
 //
 //        return  time;
 //    }
-
+}

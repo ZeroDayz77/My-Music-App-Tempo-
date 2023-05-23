@@ -47,6 +47,8 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
     public static final String EXTRA_NAME = "song_name";
     static MediaPlayer mediaPlayer;
     public static int position;
+    public static boolean isShuffleToggled;
+    public static boolean isLoopToggled;
     public static ArrayList<File> mySongs;
     Thread seekbarUpdate;
 
@@ -67,6 +69,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         setContentView(R.layout.activity_music_player);
 
         toolbar=findViewById(R.id.tempoToolBar);
@@ -213,13 +216,6 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
 
         // this will play the next song in the current song list view
 
-        mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-            @Override
-            public void onCompletion(MediaPlayer mediaPlayer) {
-                    skipsongnext.performClick();
-            }
-        });
-
         // when skip next is pressed
 
         skipsongnext.setOnClickListener(new View.OnClickListener() {
@@ -286,22 +282,40 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         buttonshuffle.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                mediaPlayer.stop();
-                mediaPlayer.release();
-                Random random = new Random();
-                int upperbound = mySongs.size();
-                position = (position+random.nextInt(upperbound));
-                Uri u = Uri.parse(mySongs.get(position).toString());
-                mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                sname = mySongs.get(position).getName().toString().replace( ".mp3", "").replace(".wav", "");
-                songnametext.setText(sname);
-                mediaPlayer.start();
-                buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
-                buttonshuffle.setBackgroundResource(R.drawable.ic_shuffle_selected_icon);
-                startAnimation(songimageview);
 
-                CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,R.drawable.ic_play_icon, position, mySongs.size());
+                if(!isShuffleToggled) {
+                    isShuffleToggled = true;
+                    buttonshuffle.setBackgroundResource(R.drawable.ic_shuffle_selected_icon);
+                    mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                        @Override
+                        public void onCompletion(MediaPlayer mediaPlayer) {
+                            mediaPlayer.stop();
+                            mediaPlayer.release();
+                            Random random = new Random();
+                            int upperbound = mySongs.size();
+                            position = (position + random.nextInt(upperbound));
+                            Uri u = Uri.parse(mySongs.get(position).toString());
+                            mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
+                            sname = mySongs.get(position).getName().toString().replace(".mp3", "").replace(".wav", "");
+                            songnametext.setText(sname);
+                            mediaPlayer.start();
+                            buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
+                            startAnimation(songimageview);
 
+                            CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname, R.drawable.ic_play_icon, position, mySongs.size());
+                        }
+                    });
+                }
+                else {
+                    isShuffleToggled = false;
+                    buttonshuffle.setBackgroundResource(R.drawable.ic_shuffle_icon);
+                    mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                        @Override
+                        public void onCompletion(MediaPlayer mediaPlayer) {
+                            skipsongnext.performClick();
+                        }
+                    });
+                }
 //                NotificationCompat.Builder builder = new NotificationCompat.Builder(MusicPlayerActivity.this, "notification");
 //                builder.setContentTitle(getString(R.string.app_name));
 //                builder.setContentText("Currently Playing: " + sname);
@@ -320,18 +334,38 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         buttonrepeat.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                mediaPlayer.stop();
-                mediaPlayer.release();
-                Uri u = Uri.parse(mySongs.get(position).toString());
-                mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                sname = mySongs.get(position).getName().toString().replace( ".mp3", "").replace(".wav", "");
-                songnametext.setText(sname);
-                mediaPlayer.start();
-                buttonrepeat.setBackgroundResource(R.drawable.ic_repeat_selected_icon);
-                startAnimation(songimageview);
 
-                CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,R.drawable.ic_play_icon, position, mySongs.size());
+                if(!isLoopToggled) {
+                    isLoopToggled = true;
+                    buttonrepeat.setBackgroundResource(R.drawable.ic_repeat_selected_icon);
+                    mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                        @Override
+                        public void onCompletion(MediaPlayer mediaPlayer) {
+                            mediaPlayer.stop();
+                            mediaPlayer.release();
+                            Uri u = Uri.parse(mySongs.get(position).toString());
+                            mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
+                            sname = mySongs.get(position).getName().toString().replace(".mp3", "").replace(".wav", "");
+                            songnametext.setText(sname);
+                            mediaPlayer.start();
+                            buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
+                            startAnimation(songimageview);
 
+                            CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname, R.drawable.ic_play_icon, position, mySongs.size());
+                        }
+                    });
+
+                }
+                else{
+                    isLoopToggled = false;
+                    buttonrepeat.setBackgroundResource(R.drawable.ic_repeat_icon);
+                    mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                        @Override
+                        public void onCompletion(MediaPlayer mediaPlayer) {
+                            skipsongnext.performClick();
+                        }
+                    });
+                }
 //                NotificationCompat.Builder builder = new NotificationCompat.Builder(MusicPlayerActivity.this, "notification");
 //                builder.setContentTitle(getString(R.string.app_name));
 //                builder.setContentText("Currently Playing: " + sname);
@@ -341,6 +375,13 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
 //
 //                NotificationManagerCompat managerCompat = NotificationManagerCompat.from(MusicPlayerActivity.this);
 //                managerCompat.notify(1,builder.build());
+            }
+        });
+
+        mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+            @Override
+            public void onCompletion(MediaPlayer mediaPlayer) {
+                skipsongnext.performClick();
             }
         });
 
