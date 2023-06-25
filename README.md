@@ -13,7 +13,7 @@ This was a good learning experience and reinforced the reason to me as to why we
 
 ## **Problem Statement**
 
-> Since Google no longer provides a music player, I have to create one myself in 2 weeks( even if I could just download one )
+> Since Google no longer provides a music player, I have to create one myself in 2 weeks ( even if I could just download one )
 
 ## **Implementations**
 
