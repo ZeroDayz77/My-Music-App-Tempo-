@@ -1,62 +1,74 @@
-# My-Music-App-Tempo-
-This mobile app was not only created in 2 weeks to challenge myself, but to also act as a way to show my skill in learning new technologies and adapting to the task given to me.
+# Tempo
 
-This was a good learning experience and reinforced the reason to me as to why we do computer science and technology as a hold, to solve real-world problems. The problem for me being I no longer had a music app. There were many issues, unsued features and ideas, here I will list them and a few other things to assist others who may come across my repo and use it for their gain as well:
+This mobile app MVP was not only initially created in 2 weeks to challenge myself but to also act as a way to show my skill in learning new technologies and adapting to the task given to me.
 
-𝗣𝗿𝗼𝗯𝗹𝗲𝗺 𝘀𝘁𝗮𝘁𝗲𝗺𝗲𝗻𝘁: Since Google no longer provides a music player, I have to create one myself in 2 weeks( even if I could just download on )
+<p align="middle">
+  <img src="https://github.com/ZeroDayz77/My-Music-App-Tempo-/assets/22108801/b4b04043-1929-404b-8be2-98ef1aa669a2" width="500" />
+  <img src="https://github.com/ZeroDayz77/My-Music-App-Tempo-/assets/22108801/742678c1-f8d8-43b4-a5a4-7f3d316a6299" width="500" /> 
+  <img src="https://github.com/ZeroDayz77/My-Music-App-Tempo-/assets/22108801/943478be-2b95-4ee0-8e40-6f5c4e51e09d" width="500" />
+  <img src="https://github.com/ZeroDayz77/My-Music-App-Tempo-/assets/22108801/5e09fe88-ff1c-4d8c-9084-b07c6a6a87f3" width="500" />
+</p>
 
-It must be able to:
+This was a good learning experience and reinforced the reason to me as to why we do computer science and technology as a hold, to solve real-world problems. The problem for me was, I no longer had a music app. There were many issues, unused features and ideas. Here I will list them and a few other things to assist others who may come across my repo and use it for their gain as well:
 
-[v] Identify and access .mp3 ( or .wave ) files on the mobile device. And ignore other audio files.
+## **Problem Statement**
 
-[v] It must list the name of the song along with the artist if available and display the song's graphic and time stamp.
+> Since Google no longer provides a music player, I have to create one myself in 2 weeks ( even if I could just download one )
 
-[v] Add the time of each song on the song select view. ( only got to a default placeholder )
+## **Implementations**
 
-[ ] Share song option.
+### **Functional Tasks**
 
-[ ] Oh hold options for song select view that ask to : create a new playlist, add to an existing playlist, play next in the queue, find on, remove, etc.
+- [x] Identify and access .mp3 ( or .wave ) files on the mobile device. And ignore other audio files.
 
-[v] It must have a pause, skip back or forward, shuffle, repeat and or loop and raise volume feature. ( not fully implemented )
+- [x] It must list the name of the song along with the artist if available and display the song's graphic and time stamp.
 
-[v] Add a toolbar at the base of the app to switch between the song list view, playlist view, and current song playing.
+- [x] Add the time of each song to the song select view. ( only got to a default placeholder )
 
-[v] Must be able to use offline.
+- [ ] Share song option.
 
-[v] Must be able to keep playing if the phone is asleep or if the app is not actively open with the same UI being able to be used either on the home screen or drop down. ( not fully implemented )
+- [ ] Oh hold options for song select view that ask to: create a new playlist, add to an existing playlist, play next in the queue, find on, remove, etc.
 
-𝗔𝗱𝗱𝗶𝘁𝗶𝗼𝗻𝗮𝗹𝗹𝘆:
+- [x] It must have a pause, skip back or forward, shuffle, repeat and or loop and raise volume feature. ( not fully implemented )
 
-[ ] Indication that shows which song is playing whether it be general library or playlist, and a way to interact with it like Spotify. Or YouTube playlist.
+- [x] Add a toolbar at the base of the app to switch between the song list view, playlist view, and current song playing.
 
-[ ] Create app Icon
+- [x] Must be able to use offline.
 
-[ ] Notification that pops up outside of the app whether on sleep or out, that allows you to skip, play / pause, etc.
+- [x] Must be able to keep playing if the phone is asleep or if the app is not actively open with the same UI being able to be used either on the home screen or dropdown. ( not fully implemented )
 
-[ ] It can have playlists, that can be named, ordered and removed.
+### **Non-functional Tasks**
 
-[v] A search or filter item on the list view / song list view. ( not fully implemented )
+- [ ] Indication that shows which song is playing whether it be a general library or playlist, and a way to interact with it like Spotify. Or a YouTube playlist.
 
-[ ] And user interface that allows to change or add profiles if needed.
+- [x] App Icon
 
-[ ] Must pause / lower on an incoming call or notification and resume or return to normal after.
+- [ ] Notification that pops up outside of the app whether on sleep or out, that allows you to skip, play/pause, etc. ( There is code for it but the current version doesn't fully implement it )
 
-[v] Detect headphone usage.
+- [ ] It can have playlists, that can be named, ordered and removed.
 
-[ ] Have customizable themes like dark mode.
+- [x] A search or filter item on the list view/song list view. ( not fully implemented )
 
-[ ] A button that says "Find on YouTube " that uses the YouTube API and searches for that song you click find on YouTube for and sends you there ( can also have the timestamps sync if possible but not needed )
+- [ ] And user interface that allows to change or add profiles if needed.
 
-[ ] Find on... button can also be an expanded feature that you click and then choose what platform you want to search for it, ie: Spotify, Soundcloud, YouTube, etc.
+- [ ] Must pause / lower on an incoming call or notification and resume or return to normal after.
 
-[ ] Custom Audio mixer / eq.
+- [x] Detect headphone usage.
 
-𝗜𝘀𝘀𝘂𝗲𝘀: ( to name a few )
+- [ ] Have customizable themes like dark mode.
 
-Seek bar doesn't dynamically track or doesn't always add up to the time duration.
+- [ ] A button that says "Find on YouTube" that uses the YouTube API and searches for that song you click "find" on YouTube for and sends you there ( can also have the timestamps sync if possible but not needed )
 
-Seek bar doesn't update after each new song to make it dynamic.
+- [ ] Find on... button can also be an expanded feature that you click and then choose what platform you want to search for it, ie: Spotify, Soundcloud, YouTube, etc.
 
-Make shuffle and loop/repeat toggle button and work as intended.
+- [ ] Custom Audio mixer/eq.
 
-No search functionality.
+### **Main Issues** ( to name a few... )
+
+> _Seek bar doesn't dynamically track or doesn't always add up to the time duration._
+
+> _Seek bar doesn't update after each new song to make it dynamic._
+
+> _Make shuffle and loop/repeat toggle buttons to work as intended._
+
+> _No search functionality._
