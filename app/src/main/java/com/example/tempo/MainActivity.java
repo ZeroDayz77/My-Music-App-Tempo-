@@ -60,6 +60,10 @@ public class MainActivity extends AppCompatActivity implements Playable {
     SearchView searchView;
     customAdapter customAdapter;
 
+    ArrayList<File> filterList;
+
+    boolean isSearchActive = false;
+
     ArrayList<File> mySongs;
 
     static MediaPlayer mediaPlayer;
@@ -103,14 +107,31 @@ public class MainActivity extends AppCompatActivity implements Playable {
         songduration = findViewById(R.id.songduration);
 
         listView = findViewById(R.id.listViewSong);
+
+        filterList = new ArrayList<>();
+
+        isSearchActive = false;
         runtimePermission();
-        //searchSongs();
 
         //allows for navigation between activities.
 
         BottomNavigationView bottomNavigationView = findViewById(R.id.bottomToolBar);
 
         bottomNavigationView.setSelectedItemId(R.id.songLibraryButton);
+
+//        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+//            @Override
+//            public boolean onQueryTextSubmit(String query) {
+//                return false;
+//            }
+//
+//            @Override
+//            public boolean onQueryTextChange(String newText) {
+//                filter(newText);
+//                customAdapter.notifyDataSetChanged();
+//                return true;
+//            }
+//        });
 
         bottomNavigationView.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
             @Override
@@ -174,7 +195,30 @@ public class MainActivity extends AppCompatActivity implements Playable {
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.menu, menu);
+        MenuItem searchItem = menu.findItem(R.id.search_button);
+        SearchView searchView = (SearchView) searchItem.getActionView();
 
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                return false;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                filterList = filter(newText);
+
+                if (isSearchActive) {
+                    customAdapter = new customAdapter(filterList);
+                    listView.setAdapter(customAdapter);
+                } else {
+                    customAdapter.updateList(mySongs);
+                    listView.setAdapter(customAdapter);
+                }
+
+                return true;
+            }
+        });
 
         // for the search feature
         MenuItem.OnActionExpandListener onActionExpandListener = new MenuItem.OnActionExpandListener() {
@@ -197,6 +241,7 @@ public class MainActivity extends AppCompatActivity implements Playable {
         searchView.onActionViewCollapsed();
 
         return true;
+
     }
 
 
@@ -221,35 +266,24 @@ public class MainActivity extends AppCompatActivity implements Playable {
                 }).check();
     }
 
+    private ArrayList<File> filter(String newText) {
+        ArrayList<File> filteredList = new ArrayList<>();
 
-    // unused function that didn't work as intended and caused crashes possibly due to not having a thread to handle this separate task.
-    private void searchSongs() {
-        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-            @Override
-            public boolean onQueryTextSubmit(String query) {
-                return false;
+        if (!newText.isEmpty()) {
+            isSearchActive = true;
+            for (File file : mySongs) {
+                if (file.getName().toLowerCase(Locale.getDefault()).contains(newText.toLowerCase(Locale.getDefault()))) {
+                    filteredList.add(file);
+                }
             }
-
-            @Override
-            public boolean onQueryTextChange(String newText) {
-                filter(newText);
-                customAdapter = new customAdapter();
-                listView.setAdapter(customAdapter);
-
-                return true;
-            }
-        });
-    }
-
-
-    // filter function for the search above.
-    private void filter(String newText) {
-        ArrayList<File> mySongs = findSong(Environment.getExternalStorageDirectory());
-        for (File file : mySongs) {
-            if (mySongs.contains(newText.toLowerCase())) {
-                mySongs.add(file);
-            }
+        } else {
+            isSearchActive = false;
         }
+
+        // Update the adapter with the appropriate list
+        customAdapter.notifyDataSetChanged();
+
+        return filteredList;
     }
 
     // this method will find if song files are available to be read ( .wav and .mp3 )
@@ -275,8 +309,8 @@ public class MainActivity extends AppCompatActivity implements Playable {
         return arrayList;
     }
 
-    // this method will display only mp3 and wav songs and will display the song name using the customAdapter object below.
     void displaySongs() {
+
         // this worked for my phone to get internal storage.
         String extFilePath = "/storage/595E-F616/Music";
         File myFiles = new File(extFilePath);
@@ -296,17 +330,24 @@ public class MainActivity extends AppCompatActivity implements Playable {
         listView.setAdapter(myAdapter);*/
 
 
-        customAdapter = new customAdapter();
+        customAdapter = new customAdapter(mySongs);
         listView.setAdapter(customAdapter);
 
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
-                String songName = (String) listView.getItemAtPosition(i);
+                int position;
+                if (isSearchActive) {
+                    position = mySongs.indexOf(filterList.get(i));
+                } else {
+                    position = i;
+                }
+
+                String songName = (listView.getItemAtPosition(i).toString());
                 startActivity(new Intent(getApplicationContext(), MusicPlayerActivity.class)
                         .putExtra("songs", mySongs)
                         .putExtra("songname", songName)
-                        .putExtra("pos", i));
+                        .putExtra("pos", position));
                 overridePendingTransition(0, 0);
 
                 CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(MusicPlayerActivity.position).getName().toString().replace(".mp3", "").replace(".wav", ""), R.drawable.ic_play_icon, MusicPlayerActivity.position, mySongs.size());
@@ -349,14 +390,25 @@ public class MainActivity extends AppCompatActivity implements Playable {
     // custom adapter used to display the songs.
     class customAdapter extends BaseAdapter {
 
+        private ArrayList<File> adapterList;
+
+        public customAdapter(ArrayList<File> list) {
+            adapterList = list;
+        }
+
+        public void updateList(ArrayList<File> newList) {
+            adapterList = newList;
+            notifyDataSetChanged();
+        }
+
         @Override
         public int getCount() {
-            return items.length;
+            return adapterList.size();
         }
 
         @Override
         public Object getItem(int i) {
-            return null;
+            return adapterList.get(i);
         }
 
         @Override
@@ -373,7 +425,7 @@ public class MainActivity extends AppCompatActivity implements Playable {
             TextView songText = myView.findViewById(R.id.songname);
             songText.setSelected(true);
             songText.setEnabled(true);
-            songText.setText(items[i]);
+            songText.setText(adapterList.get(i).getName().replace(".mp3", "").replace(".wav", ""));
 
             return myView;
         }

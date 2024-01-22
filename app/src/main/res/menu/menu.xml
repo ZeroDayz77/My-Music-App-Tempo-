@@ -10,6 +10,7 @@
         android:icon="@drawable/ic_search"
         android:id="@+id/search_button"
         app:showAsAction="ifRoom|collapseActionView"
+        app:queryHint="Name of song..."
         app:actionViewClass="androidx.appcompat.widget.SearchView">
 
     </item>
