@@ -56,7 +56,7 @@ import java.util.Locale;
 public class MainActivity extends AppCompatActivity implements Playable {
     ListView listView;
     String[] items;
-    TextView songduration;
+//    TextView songduration;
     SearchView searchView;
     customAdapter customAdapter;
 
@@ -104,7 +104,7 @@ public class MainActivity extends AppCompatActivity implements Playable {
         getSupportActionBar().setTitle("Tempo");
 
         searchView = findViewById(R.id.search_button);
-        songduration = findViewById(R.id.songduration);
+//        songduration = findViewById(R.id.songduration);
 
         listView = findViewById(R.id.listViewSong);
 
