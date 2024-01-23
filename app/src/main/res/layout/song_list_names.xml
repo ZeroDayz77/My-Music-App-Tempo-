@@ -37,7 +37,7 @@
             android:layout_alignParentEnd="true"
             android:layout_marginStart="5dp"
             android:layout_marginTop="5dp"
-            android:layout_marginEnd="56dp"
+            android:layout_marginEnd="5dp"
             android:layout_marginBottom="5dp"
             android:layout_toEndOf="@+id/songimage"
             android:ellipsize="marquee"
@@ -52,24 +52,6 @@
             android:textSize="15sp">
 
         </TextView>
-
-        <TextView
-            android:id="@+id/songduration"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
-            android:layout_alignParentEnd="true"
-            android:layout_centerInParent="true"
-            android:layout_marginStart="5dp"
-            android:layout_marginTop="5dp"
-            android:layout_marginEnd="5dp"
-            android:layout_marginBottom="5dp"
-            android:paddingLeft="9dp"
-            android:paddingTop="6dp"
-            android:paddingRight="5dp"
-            android:paddingBottom="6dp"
-            android:text="4:40"
-            android:textColor="@color/cloudy_grey"
-            android:textSize="15sp"></TextView>
 
     </RelativeLayout>
 
