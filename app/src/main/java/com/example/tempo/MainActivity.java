@@ -56,6 +56,8 @@ import java.util.Locale;
 public class MainActivity extends AppCompatActivity implements Playable {
     ListView listView;
     String[] items;
+
+    String currentSongName;
     TextView songduration;
     SearchView searchView;
     customAdapter customAdapter;
@@ -119,20 +121,6 @@ public class MainActivity extends AppCompatActivity implements Playable {
 
         bottomNavigationView.setSelectedItemId(R.id.songLibraryButton);
 
-//        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-//            @Override
-//            public boolean onQueryTextSubmit(String query) {
-//                return false;
-//            }
-//
-//            @Override
-//            public boolean onQueryTextChange(String newText) {
-//                filter(newText);
-//                customAdapter.notifyDataSetChanged();
-//                return true;
-//            }
-//        });
-
         bottomNavigationView.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
             @Override
             public boolean onNavigationItemSelected(@NonNull MenuItem item) {
@@ -184,9 +172,9 @@ public class MainActivity extends AppCompatActivity implements Playable {
                 notificationManager.createNotificationChannel(channel);
             }
 
-            channel.enableVibration(false);
-            channel.setSound(null, null);
-            channel.setShowBadge(false);
+//            channel.enableVibration(false);
+//            channel.setSound(null, null);
+//            channel.setShowBadge(false);
         }
     }
 
@@ -339,8 +327,10 @@ public class MainActivity extends AppCompatActivity implements Playable {
                 int position;
                 if (isSearchActive) {
                     position = mySongs.indexOf(filterList.get(i));
+                    currentSongName = mySongs.get(position).getName().toString().replace( ".mp3", "").replace(".wav", "");
                 } else {
                     position = i;
+                    currentSongName = mySongs.get(position).getName().toString().replace( ".mp3", "").replace(".wav", "");
                 }
 
                 String songName = (listView.getItemAtPosition(i).toString());
@@ -350,17 +340,15 @@ public class MainActivity extends AppCompatActivity implements Playable {
                         .putExtra("pos", position));
                 overridePendingTransition(0, 0);
 
-                CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(MusicPlayerActivity.position).getName().toString().replace(".mp3", "").replace(".wav", ""), R.drawable.ic_play_icon, MusicPlayerActivity.position, mySongs.size());
+                CreateMusicNotification.createNotification(MainActivity.this, songName, R.drawable.ic_play_icon, MusicPlayerActivity.position, mySongs.size());
 
-//                NotificationCompat.Builder builder = new NotificationCompat.Builder(MainActivity.this, "notification");
-//                builder.setContentTitle(getString(R.string.app_name));
-//                builder.setContentText("Currently Playing: " + mySongs.get(i).getName().toString().replace( ".mp3", "").replace(".wav", ""));
-//                builder.setSmallIcon(R.drawable.ic_music);
-//                builder.setSilent(true);
-//                builder.setAutoCancel(true);
-//
-//                NotificationManagerCompat managerCompat = NotificationManagerCompat.from(MainActivity.this);
-//                managerCompat.notify(1,builder.build());
+                NotificationCompat.Builder builder = new NotificationCompat.Builder(MainActivity.this, CreateMusicNotification.CHANNEL_ID);
+                builder.setContentTitle(getString(R.string.app_name));
+                builder.setContentText("Currently Playing: " + currentSongName);
+                builder.setSmallIcon(R.drawable.ic_music);
+
+                NotificationManagerCompat managerCompat = NotificationManagerCompat.from(MainActivity.this);
+                managerCompat.notify(1,builder.build());
             }
         });
     }
