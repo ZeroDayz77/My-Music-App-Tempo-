@@ -13,7 +13,6 @@ public class TempoSongPlaylistDatabase extends SQLiteOpenHelper {
     private Context context;
     private static final String DATABASE_NAME = "UserPlaylists.db";
     private static final int DATABASE_VERSION = 1;
-
     private static final String TABLE_NAME = "playlists";
     private static final String COLUMN_ID = "id";
     private static final String COLUMN_TITLE = "song_title";

@@ -50,28 +50,22 @@ import com.karumi.dexter.listener.single.PermissionListener;
 import java.io.File;
 import java.lang.reflect.ParameterizedType;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity implements Playable {
     ListView listView;
     String[] items;
-//    TextView songduration;
     SearchView searchView;
     customAdapter customAdapter;
-
     ArrayList<File> filterList;
-
     boolean isSearchActive = false;
-
     ArrayList<File> mySongs;
-
     static MediaPlayer mediaPlayer;
-
     private Toolbar toolbar;
-
     NotificationManager notificationManager;
-
     RecyclerView recyclerView;
     FloatingActionButton NewPlaylistButton;
 
@@ -104,7 +98,6 @@ public class MainActivity extends AppCompatActivity implements Playable {
         getSupportActionBar().setTitle("Tempo");
 
         searchView = findViewById(R.id.search_button);
-//        songduration = findViewById(R.id.songduration);
 
         listView = findViewById(R.id.listViewSong);
 
@@ -118,20 +111,6 @@ public class MainActivity extends AppCompatActivity implements Playable {
         BottomNavigationView bottomNavigationView = findViewById(R.id.bottomToolBar);
 
         bottomNavigationView.setSelectedItemId(R.id.songLibraryButton);
-
-//        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-//            @Override
-//            public boolean onQueryTextSubmit(String query) {
-//                return false;
-//            }
-//
-//            @Override
-//            public boolean onQueryTextChange(String newText) {
-//                filter(newText);
-//                customAdapter.notifyDataSetChanged();
-//                return true;
-//            }
-//        });
 
         bottomNavigationView.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
             @Override
@@ -166,13 +145,6 @@ public class MainActivity extends AppCompatActivity implements Playable {
                 return false;
             }
         });
-
-        // unsued code to have the duration of each song displayed on the song_list_names layout. Did not work as intended and ran out of time to troubleshoot.
-
-//        mediaPlayer = new MediaPlayer();
-//
-//        String endTime = createSongTime(mediaPlayer.getDuration());
-//        songduration.setText(endTime);
     }
 
     private void createChannel() {
@@ -319,16 +291,12 @@ public class MainActivity extends AppCompatActivity implements Playable {
         //this one line is what I had used initially as a default to get a general external storage.
 //        final ArrayList<File> mySongs = findSong(Environment.getExternalStorageDirectory());
 
+        Collections.sort(mySongs, (file1, file2) -> file1.getName().compareToIgnoreCase(file2.getName()));
+
         items = new String[mySongs.size()];
         for (int i = 0; i < mySongs.size(); i++) {
             items[i] = mySongs.get(i).getName().toString().replace(".mp3", "").replace(".wav", "");
         }
-
-        // this adapter was used initially to display the names of the songs without any styling.
-
-        /*ArrayAdapter<String> myAdapter = new ArrayAdapter<String>( this, android.R.layout.simple_list_item_1, items);
-        listView.setAdapter(myAdapter);*/
-
 
         customAdapter = new customAdapter(mySongs);
         listView.setAdapter(customAdapter);
@@ -479,24 +447,4 @@ public class MainActivity extends AppCompatActivity implements Playable {
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         super.onBackPressed();
     }
-
-
-//     unused code for the display of time duration of the songs.
-
-//    public String createSongTime(int songDuration)
-//    {
-//        String time = "";
-//        int min = songDuration/1000/60;
-//        int sec = songDuration/1000%60;
-//
-//        time+=min+":";
-//
-//        if (sec<10)
-//        {
-//            time+="0";
-//        }
-//        time+=sec;
-//
-//        return  time;
-//    }
 }

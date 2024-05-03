@@ -40,20 +40,15 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
     TextView songnametext, songstarttime, songendtime;
     SeekBar seekbar;
     ImageView songimageview;
-
     String sname;
     NotificationManager notificationManager;
-
-    public static final String EXTRA_NAME = "song_name";
-    static MediaPlayer mediaPlayer;
+    MediaPlayer mediaPlayer;
     public static int position;
     public static boolean isShuffleToggled;
     public static boolean isLoopToggled;
     public static ArrayList<File> mySongs;
     Thread seekbarUpdate;
-
     public static Bundle bundle;
-
     private Toolbar toolbar;
 
     @Override
@@ -113,7 +108,6 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         bundle = i.getExtras();
 
         mySongs = (ArrayList) bundle.getParcelableArrayList("songs");
-        String songName = i.getStringExtra("songname");
         position = bundle.getInt("pos", 0);
 
         songnametext.setSelected(true);
@@ -125,53 +119,8 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         mediaPlayer = MediaPlayer.create(getApplicationContext(), uri);
         mediaPlayer.start();
 
-        seekbarUpdate = new Thread()
-        {
-            @Override
-            public void run() {
-                int totalSongDuration = mediaPlayer.getDuration();
-                int currentSongPosition = 0;
-
-                while (currentSongPosition < totalSongDuration)
-                {
-                    //time in milliseconds for the while loop to checks before updating seekbar
-                    try {
-                        sleep(500);
-                        currentSongPosition = mediaPlayer.getCurrentPosition();
-                        seekbar.setProgress(currentSongPosition);
-                    }
-                    catch (InterruptedException | IllegalStateException e)
-                    {
-                       e.printStackTrace();
-                    }
-                }
-            }
-        };
-
-        //custom code for the seekbar to dynamically change it per song, though it does not fully work as intended.
-
-        seekbarUpdate.start();
-        seekbar.setMax(mediaPlayer.getDuration());
-        seekbar.getProgressDrawable().setColorFilter(getResources().getColor(R.color.white), PorterDuff.Mode.MULTIPLY);
-        seekbar.getThumb().setColorFilter(getResources().getColor(R.color.teal_700), PorterDuff.Mode.SRC_IN);
-
-        seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-                mediaPlayer.seekTo(seekBar.getProgress());
-            }
-        });
-
+        // Initialize seekbarUpdate thread
+        startSeekbarUpdateThread();
         // displays the song duration and current song time on the music player activity.
 
         String endTime = createSongTime(mediaPlayer.getDuration());
@@ -223,6 +172,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
             public void onClick(View view) {
                 mediaPlayer.stop();
                 mediaPlayer.release();
+                stopSeekbarUpdate();
                 position = ((position+1)%mySongs.size());
                 Uri u = Uri.parse(mySongs.get(position).toString());
                 mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
@@ -232,6 +182,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
                 buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
                 startAnimation(songimageview);
 
+                startSeekbarUpdateThread();
                 onButtonNext();
 
 //                NotificationCompat.Builder builder = new NotificationCompat.Builder(MusicPlayerActivity.this, "notification");
@@ -254,6 +205,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
             public void onClick(View view) {
                 mediaPlayer.stop();
                 mediaPlayer.release();
+                stopSeekbarUpdate();
                 position = ((position-1)<0)?(mySongs.size()-1):(position-1);
                 Uri u = Uri.parse(mySongs.get(position).toString());
                 mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
@@ -263,6 +215,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
                 buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
                 startAnimation(songimageview);
 
+                startSeekbarUpdateThread();
                 onButtonPrevious();
 //
 //                NotificationCompat.Builder builder = new NotificationCompat.Builder(MusicPlayerActivity.this, "notification");
@@ -412,6 +365,65 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         });
     }
 
+    private void startSeekbarUpdateThread() {
+        seekbarUpdate = new Thread() {
+            @Override
+            public void run() {
+                while (true) { // Loop continuously until interrupted
+                    try {
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (mediaPlayer != null) {
+                                    int totalSongDuration = mediaPlayer.getDuration();
+                                    int currentSongPosition = mediaPlayer.getCurrentPosition();
+                                    seekbar.setMax(totalSongDuration);
+                                    seekbar.setProgress(currentSongPosition);
+                                }
+                            }
+                        });
+                        Thread.sleep(500); // Update every 500 milliseconds
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                        break; // Break the loop when interrupted
+                    }
+                }
+            }
+        };
+
+        //custom code for the seekbar to dynamically change it per song, though it does not fully work as intended.
+
+        seekbarUpdate.start();
+        seekbar.setMax(mediaPlayer.getDuration());
+        seekbar.getProgressDrawable().setColorFilter(getResources().getColor(R.color.white), PorterDuff.Mode.MULTIPLY);
+        seekbar.getThumb().setColorFilter(getResources().getColor(R.color.teal_700), PorterDuff.Mode.SRC_IN);
+
+        seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                mediaPlayer.seekTo(seekBar.getProgress());
+            }
+        });
+    }
+
+    // Method to stop the seekbarUpdate thread
+    private void stopSeekbarUpdate() {
+        if (seekbarUpdate != null && seekbarUpdate.isAlive()) {
+            seekbarUpdate.interrupt();
+            seekbar.setProgress(0);
+        }
+    }
+
     BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -513,14 +525,4 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         super.onBackPressed();
     }
-
-//    @Override
-//    protected void onDestroy() {
-//        super.onDestroy();
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
-//            notificationManager.cancelAll();
-//        }
-//
-//        unregisterReceiver(broadcastReceiver);
-//    }
 }

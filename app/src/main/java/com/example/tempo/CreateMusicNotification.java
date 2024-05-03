@@ -16,11 +16,9 @@ import com.example.tempo.Services.NotificationActionService;
 public class CreateMusicNotification extends AppCompatActivity {
 
     public static final String CHANNEL_ID = "channel1";
-
     public static final String  SKIPSONGNEXT = "skip_song_next";
     public static final String  SKIPSONGPREV = "skip_song_prev";
     public static final String  BUTTONPLAY = "button_play";
-
     public static Notification notification;
 
     public  static void createNotification(Context context, String currentSong, int playButton, int pos, int size){
@@ -83,8 +81,6 @@ public class CreateMusicNotification extends AppCompatActivity {
                     .build();
 
             managerCompat.notify(1,notification);
-
-
         }
     }
 }

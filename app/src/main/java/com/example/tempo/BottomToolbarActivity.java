@@ -25,7 +25,6 @@ public class BottomToolbarActivity extends AppCompatActivity {
 
     static MediaPlayer mediaPlayer;
 
-
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
