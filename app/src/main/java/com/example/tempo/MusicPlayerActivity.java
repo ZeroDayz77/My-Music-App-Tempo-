@@ -392,9 +392,10 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         };
 
         //custom code for the seekbar to dynamically change it per song, though it does not fully work as intended.
+        seekbar.setMax(mediaPlayer.getDuration());
 
         seekbarUpdate.start();
-        seekbar.setMax(mediaPlayer.getDuration());
+
         seekbar.getProgressDrawable().setColorFilter(getResources().getColor(R.color.white), PorterDuff.Mode.MULTIPLY);
         seekbar.getThumb().setColorFilter(getResources().getColor(R.color.teal_700), PorterDuff.Mode.SRC_IN);
 
