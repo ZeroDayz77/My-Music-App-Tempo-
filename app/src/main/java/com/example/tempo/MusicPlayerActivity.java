@@ -185,6 +185,13 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
                 startSeekbarUpdateThread();
                 onButtonNext();
 
+                mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                    @Override
+                    public void onCompletion(MediaPlayer mediaPlayer) {
+                        skipsongnext.performClick();
+                    }
+                });
+
 //                NotificationCompat.Builder builder = new NotificationCompat.Builder(MusicPlayerActivity.this, "notification");
 //                builder.setContentTitle(getString(R.string.app_name));
 //                builder.setContentText("Currently Playing: " + sname);
@@ -239,35 +246,10 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
                 if(!isShuffleToggled) {
                     isShuffleToggled = true;
                     buttonshuffle.setBackgroundResource(R.drawable.ic_shuffle_selected_icon);
-                    mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-                        @Override
-                        public void onCompletion(MediaPlayer mediaPlayer) {
-                            mediaPlayer.stop();
-                            mediaPlayer.release();
-                            Random random = new Random();
-                            int upperbound = mySongs.size();
-                            position = (position + random.nextInt(upperbound));
-                            Uri u = Uri.parse(mySongs.get(position).toString());
-                            mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                            sname = mySongs.get(position).getName().toString().replace(".mp3", "").replace(".wav", "");
-                            songnametext.setText(sname);
-                            mediaPlayer.start();
-                            buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
-                            startAnimation(songimageview);
-
-                            CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname, R.drawable.ic_play_icon, position, mySongs.size());
-                        }
-                    });
                 }
                 else {
                     isShuffleToggled = false;
                     buttonshuffle.setBackgroundResource(R.drawable.ic_shuffle_icon);
-                    mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-                        @Override
-                        public void onCompletion(MediaPlayer mediaPlayer) {
-                            skipsongnext.performClick();
-                        }
-                    });
                 }
 //                NotificationCompat.Builder builder = new NotificationCompat.Builder(MusicPlayerActivity.this, "notification");
 //                builder.setContentTitle(getString(R.string.app_name));
@@ -281,43 +263,23 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
 
             }
         });
-
-        // when repeat is pressed, does not work as intended as it doesn't repeat the current song and is not a toggle, does not crash the program.
 
         buttonrepeat.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
 
-                if(!isLoopToggled) {
-                    isLoopToggled = true;
-                    buttonrepeat.setBackgroundResource(R.drawable.ic_repeat_selected_icon);
-                    mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-                        @Override
-                        public void onCompletion(MediaPlayer mediaPlayer) {
-                            mediaPlayer.stop();
-                            mediaPlayer.release();
-                            Uri u = Uri.parse(mySongs.get(position).toString());
-                            mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                            sname = mySongs.get(position).getName().toString().replace(".mp3", "").replace(".wav", "");
-                            songnametext.setText(sname);
-                            mediaPlayer.start();
-                            buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
-                            startAnimation(songimageview);
-
-                            CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname, R.drawable.ic_play_icon, position, mySongs.size());
-                        }
-                    });
-
-                }
-                else{
-                    isLoopToggled = false;
-                    buttonrepeat.setBackgroundResource(R.drawable.ic_repeat_icon);
-                    mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-                        @Override
-                        public void onCompletion(MediaPlayer mediaPlayer) {
-                            skipsongnext.performClick();
-                        }
-                    });
+                if (mediaPlayer!=null)
+                {
+                    if (mediaPlayer.isLooping())
+                    {
+                        mediaPlayer.setLooping(false);
+                        buttonrepeat.setBackgroundResource(R.drawable.ic_repeat_icon);
+                    }
+                    else
+                    {
+                        mediaPlayer.setLooping(true);
+                        buttonrepeat.setBackgroundResource(R.drawable.ic_repeat_selected_icon);
+                    }
                 }
 //                NotificationCompat.Builder builder = new NotificationCompat.Builder(MusicPlayerActivity.this, "notification");
 //                builder.setContentTitle(getString(R.string.app_name));
@@ -331,10 +293,30 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
             }
         });
 
+        //still crashes
         mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
             @Override
             public void onCompletion(MediaPlayer mediaPlayer) {
-                skipsongnext.performClick();
+                if(isShuffleToggled) {
+                    mediaPlayer.stop();
+                    mediaPlayer.release();
+                    Random random = new Random();
+                    int upperbound = mySongs.size();
+                    position = (position + random.nextInt(upperbound));
+                    Uri u = Uri.parse(mySongs.get(position).toString());
+                    mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
+                    sname = mySongs.get(position).getName().toString().replace(".mp3", "").replace(".wav", "");
+                    songnametext.setText(sname);
+                    mediaPlayer.start();
+                    buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
+                    startAnimation(songimageview);
+
+                    startSeekbarUpdateThread();
+
+                }
+                else {
+                    skipsongnext.performClick();
+                }
             }
         });
 

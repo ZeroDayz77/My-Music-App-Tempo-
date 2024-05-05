@@ -311,6 +311,13 @@ public class MainActivity extends AppCompatActivity implements Playable {
                     position = i;
                 }
 
+                // Check if mediaPlayer is playing and stop it
+                if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                    mediaPlayer.stop();
+                    mediaPlayer.release();
+                    mediaPlayer = null;
+                }
+
                 String songName = (listView.getItemAtPosition(i).toString());
                 startActivity(new Intent(getApplicationContext(), MusicPlayerActivity.class)
                         .putExtra("songs", mySongs)
