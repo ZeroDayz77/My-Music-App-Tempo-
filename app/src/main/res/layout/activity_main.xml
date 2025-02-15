@@ -21,7 +21,7 @@
 
     </ListView>
 
-
     <include layout="@layout/bottom_tool_bar" />
+
 
 </RelativeLayout>

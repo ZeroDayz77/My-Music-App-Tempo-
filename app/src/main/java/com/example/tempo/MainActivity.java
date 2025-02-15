@@ -7,35 +7,24 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.graphics.drawable.shapes.Shape;
 import android.media.MediaPlayer;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.os.Handler;
 import android.util.Log;
 import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.media.MediaPlayer;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
 import androidx.appcompat.widget.Toolbar;
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.tempo.Services.OnClearRecentService;
@@ -49,11 +38,9 @@ import com.karumi.dexter.listener.PermissionGrantedResponse;
 import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.single.PermissionListener;
 import java.io.File;
-import java.lang.reflect.ParameterizedType;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
+
 import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity implements Playable {
@@ -336,16 +323,6 @@ public class MainActivity extends AppCompatActivity implements Playable {
                 overridePendingTransition(0, 0);
 
                 CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(MusicPlayerActivity.position).getName().toString().replace(".mp3", "").replace(".wav", ""), R.drawable.ic_play_icon, MusicPlayerActivity.position, mySongs.size());
-
-//                NotificationCompat.Builder builder = new NotificationCompat.Builder(MainActivity.this, "notification");
-//                builder.setContentTitle(getString(R.string.app_name));
-//                builder.setContentText("Currently Playing: " + mySongs.get(i).getName().toString().replace( ".mp3", "").replace(".wav", ""));
-//                builder.setSmallIcon(R.drawable.ic_music);
-//                builder.setSilent(true);
-//                builder.setAutoCancel(true);
-//
-//                NotificationManagerCompat managerCompat = NotificationManagerCompat.from(MainActivity.this);
-//                managerCompat.notify(1,builder.build());
             }
         });
     }

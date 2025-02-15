@@ -51,6 +51,8 @@
         <receiver android:name=".Services.NotificationActionService" />
 
         <service android:name=".Services.OnClearRecentService" />
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-5675914922459331~4542834527"/>
     </application>
-
 </manifest>
