@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -102,6 +103,10 @@ public class MainActivity extends AppCompatActivity implements Playable {
         listView = findViewById(R.id.listViewSong);
 
         filterList = new ArrayList<>();
+
+        customAdapter = new customAdapter(new ArrayList<>());
+        listView.setAdapter(customAdapter);
+
 
         isSearchActive = false;
         runtimePermission();
@@ -253,7 +258,12 @@ public class MainActivity extends AppCompatActivity implements Playable {
         }
 
         // Update the adapter with the appropriate list
-        customAdapter.notifyDataSetChanged();
+        if (customAdapter != null) {
+            customAdapter.notifyDataSetChanged();
+        } else {
+            Log.e("MainActivity", "customAdapter is null when calling notifyDataSetChanged()");
+        }
+
 
         return filteredList;
     }
@@ -298,7 +308,7 @@ public class MainActivity extends AppCompatActivity implements Playable {
             items[i] = mySongs.get(i).getName().toString().replace(".mp3", "").replace(".wav", "");
         }
 
-        customAdapter = new customAdapter(mySongs);
+        customAdapter.adapterList = mySongs;
         listView.setAdapter(customAdapter);
 
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
