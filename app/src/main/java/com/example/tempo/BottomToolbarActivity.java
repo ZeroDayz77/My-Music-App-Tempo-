@@ -34,7 +34,12 @@ public class BottomToolbarActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.bottom_tool_bar);
 
-        MobileAds.initialize(this, initializationStatus -> {});
+        new Thread(
+                () -> {
+                    // Initialize the Google Mobile Ads SDK on a background thread.
+                    MobileAds.initialize(this, initializationStatus -> {});
+                })
+                .start();
         adView = findViewById(R.id.adView);
         AdRequest adRequest = new AdRequest.Builder().build();
         adView.loadAd(adRequest);
