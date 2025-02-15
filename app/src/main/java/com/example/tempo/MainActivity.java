@@ -54,8 +54,6 @@ public class MainActivity extends AppCompatActivity implements Playable {
     static MediaPlayer mediaPlayer;
     private Toolbar toolbar;
     NotificationManager notificationManager;
-    RecyclerView recyclerView;
-    FloatingActionButton NewPlaylistButton;
 
 
     @Override
@@ -65,8 +63,6 @@ public class MainActivity extends AppCompatActivity implements Playable {
         setTheme(R.style.Theme_Tempo_NoActionBar);
         setContentView(R.layout.activity_main);
 
-        recyclerView = findViewById(R.id.recyclerView);
-        NewPlaylistButton = findViewById(R.id.NewPlaylistButton);
 //        NewPlaylistButton.setOnClickListener(new View.OnClickListener() {
 //            @Override
 //            public void onClick(View view) {

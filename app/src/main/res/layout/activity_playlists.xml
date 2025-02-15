@@ -16,17 +16,22 @@
         android:layout_alignParentEnd="true"
         android:layout_alignParentBottom="true"
         android:layout_marginEnd="30dp"
-        android:layout_marginBottom="75dp"
+        android:layout_marginBottom="110dp"
         android:clickable="true"
         android:contentDescription="TODO"
         android:focusable="true"
         app:backgroundTint="#FFFFFF"
         app:srcCompat="@drawable/ic_new_playlist_white_icon" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerView"
+    <ListView
+        android:id="@+id/listView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:layout_marginTop="56dp"
+        android:layout_marginBottom="56dp"
+        android:divider="@android:color/transparent"
+        android:dividerHeight="10.0sp"
+        android:padding="8dp"/>
 
     <TextView
         android:id="@+id/NewPlaylistText"
