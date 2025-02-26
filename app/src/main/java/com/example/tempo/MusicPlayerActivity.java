@@ -4,11 +4,10 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatButton;
 import androidx.appcompat.widget.Toolbar;
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
+import android.annotation.SuppressLint;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
@@ -20,8 +19,6 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.PersistableBundle;
-import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageView;
@@ -33,14 +30,15 @@ import com.google.android.material.navigation.NavigationBarView;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Objects;
 import java.util.Random;
 
 public class MusicPlayerActivity extends AppCompatActivity implements Playable {
-    AppCompatButton buttonplay, skipsongnext, skipsongprev, buttonshuffle, buttonrepeat;
-    TextView songnametext, songstarttime, songendtime;
+    AppCompatButton buttonPlay, skipSongNext, skipSongPrev, buttonShuffle, buttonRepeat;
+    TextView songNameText, songStartTime, songEndTime;
     SeekBar seekbar;
-    ImageView songimageview;
-    String sname;
+    ImageView songImageView;
+    String songName;
     NotificationManager notificationManager;
     MediaPlayer mediaPlayer;
     public static int position;
@@ -49,7 +47,6 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
     public static ArrayList<File> mySongs;
     Thread seekbarUpdate;
     public static Bundle bundle;
-    private Toolbar toolbar;
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
@@ -67,22 +64,22 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         setContentView(R.layout.activity_music_player);
 
-        toolbar=findViewById(R.id.tempoToolBar);
-        setSupportActionBar(toolbar);
-        getSupportActionBar().setTitle("Now Playing");
+        Toolbar toolBar = findViewById(R.id.tempoToolBar);
+        setSupportActionBar(toolBar);
+        Objects.requireNonNull(getSupportActionBar()).setTitle("Now Playing");
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
 //        getSupportActionBar().setDisplayShowHomeEnabled(true);
 
-        buttonplay = findViewById(R.id.buttonplay);
-        skipsongnext = findViewById(R.id.skipsongnext);
-        skipsongprev = findViewById(R.id.skipsongprev);
-        buttonrepeat = findViewById(R.id.buttonrepeat);
-        buttonshuffle = findViewById(R.id.buttonshuffle);
-        songimageview = findViewById(R.id.songimageview);
+        buttonPlay = findViewById(R.id.buttonplay);
+        skipSongNext = findViewById(R.id.skipsongnext);
+        skipSongPrev = findViewById(R.id.skipsongprev);
+        buttonRepeat = findViewById(R.id.buttonrepeat);
+        buttonShuffle = findViewById(R.id.buttonshuffle);
+        songImageView = findViewById(R.id.songimageview);
 
-        songnametext = findViewById(R.id.songnametext);
-        songstarttime = findViewById(R.id.songstarttime);
-        songendtime = findViewById(R.id.songendtime);
+        songNameText = findViewById(R.id.songnametext);
+        songStartTime = findViewById(R.id.songstarttime);
+        songEndTime = findViewById(R.id.songendtime);
 
         seekbar = findViewById(R.id.seekbar);
 
@@ -110,11 +107,11 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         mySongs = (ArrayList) bundle.getParcelableArrayList("songs");
         position = bundle.getInt("pos", 0);
 
-        songnametext.setSelected(true);
+        songNameText.setSelected(true);
         Uri uri = Uri.parse(mySongs.get(position).toString());
-        sname = mySongs.get(position).getName().toString().replace( ".mp3", "").replace(".wav", "");
+        songName = mySongs.get(position).getName().replace( ".mp3", "").replace(".wav", "");
 
-        songnametext.setText(sname);
+        songNameText.setText(songName);
 
         mediaPlayer = MediaPlayer.create(getApplicationContext(), uri);
         mediaPlayer.start();
@@ -124,7 +121,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         // displays the song duration and current song time on the music player activity.
 
         String endTime = createSongTime(mediaPlayer.getDuration());
-        songendtime.setText(endTime);
+        songEndTime.setText(endTime);
 
         final Handler handler = new Handler();
         final int delay = 500;
@@ -133,10 +130,10 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
             @Override
             public void run() {
                 String currentTime = createSongTime(mediaPlayer.getCurrentPosition());
-                songstarttime.setText(currentTime);
+                songStartTime.setText(currentTime);
 
                 String endTime = createSongTime(mediaPlayer.getDuration());
-                songendtime.setText(endTime);
+                songEndTime.setText(endTime);
 
                 handler.postDelayed(this, delay);
             }
@@ -145,18 +142,18 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
 
         // when play button is pressed
 
-        buttonplay.setOnClickListener(new View.OnClickListener() {
+        buttonPlay.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 if (mediaPlayer.isPlaying())
                 {
-                    buttonplay.setBackgroundResource(R.drawable.ic_play_icon);
-                    CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,R.drawable.ic_play_icon, position, mySongs.size());
+                    buttonPlay.setBackgroundResource(R.drawable.ic_play_icon);
+                    CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,R.drawable.ic_play_icon, position, mySongs.size());
                     mediaPlayer.pause();
                     onButtonPause();
                 } else {
-                    buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
-                    CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,R.drawable.ic_play_icon, position, mySongs.size());
+                    buttonPlay.setBackgroundResource(R.drawable.ic_pause_icon);
+                    CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,R.drawable.ic_play_icon, position, mySongs.size());
                     mediaPlayer.start();
                     onButtonPlay();
                 }
@@ -167,7 +164,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
 
         // when skip next is pressed
 
-        skipsongnext.setOnClickListener(new View.OnClickListener() {
+        skipSongNext.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 mediaPlayer.stop();
@@ -176,11 +173,11 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
                 position = ((position+1)%mySongs.size());
                 Uri u = Uri.parse(mySongs.get(position).toString());
                 mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                sname = mySongs.get(position).getName().toString().replace( ".mp3", "").replace(".wav", "");
-                songnametext.setText(sname);
+                songName = mySongs.get(position).getName().replace( ".mp3", "").replace(".wav", "");
+                songNameText.setText(songName);
                 mediaPlayer.start();
-                buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
-                startAnimation(songimageview);
+                buttonPlay.setBackgroundResource(R.drawable.ic_pause_icon);
+                startAnimation(songImageView);
 
                 startSeekbarUpdateThread();
                 onButtonNext();
@@ -188,7 +185,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
                 mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
                     @Override
                     public void onCompletion(MediaPlayer mediaPlayer) {
-                        skipsongnext.performClick();
+                        skipSongNext.performClick();
                     }
                 });
 
@@ -207,7 +204,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
 
         // when skip previous is pressed
 
-        skipsongprev.setOnClickListener(new View.OnClickListener() {
+        skipSongPrev.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 mediaPlayer.stop();
@@ -216,11 +213,11 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
                 position = ((position-1)<0)?(mySongs.size()-1):(position-1);
                 Uri u = Uri.parse(mySongs.get(position).toString());
                 mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                sname = mySongs.get(position).getName().toString().replace( ".mp3", "").replace(".wav", "");
-                songnametext.setText(sname);
+                songName = mySongs.get(position).getName().replace( ".mp3", "").replace(".wav", "");
+                songNameText.setText(songName);
                 mediaPlayer.start();
-                buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
-                startAnimation(songimageview);
+                buttonPlay.setBackgroundResource(R.drawable.ic_pause_icon);
+                startAnimation(songImageView);
 
                 startSeekbarUpdateThread();
                 onButtonPrevious();
@@ -239,17 +236,17 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
 
         // when shuffle is pressed, causes crashes to the program, not fully sure as to why.
 
-        buttonshuffle.setOnClickListener(new View.OnClickListener() {
+        buttonShuffle.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
 
                 if(!isShuffleToggled) {
                     isShuffleToggled = true;
-                    buttonshuffle.setBackgroundResource(R.drawable.ic_shuffle_selected_icon);
+                    buttonShuffle.setBackgroundResource(R.drawable.ic_shuffle_selected_icon);
                 }
                 else {
                     isShuffleToggled = false;
-                    buttonshuffle.setBackgroundResource(R.drawable.ic_shuffle_icon);
+                    buttonShuffle.setBackgroundResource(R.drawable.ic_shuffle_icon);
                 }
 //                NotificationCompat.Builder builder = new NotificationCompat.Builder(MusicPlayerActivity.this, "notification");
 //                builder.setContentTitle(getString(R.string.app_name));
@@ -264,7 +261,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
             }
         });
 
-        buttonrepeat.setOnClickListener(new View.OnClickListener() {
+        buttonRepeat.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
 
@@ -273,12 +270,12 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
                     if (mediaPlayer.isLooping())
                     {
                         mediaPlayer.setLooping(false);
-                        buttonrepeat.setBackgroundResource(R.drawable.ic_repeat_icon);
+                        buttonRepeat.setBackgroundResource(R.drawable.ic_repeat_icon);
                     }
                     else
                     {
                         mediaPlayer.setLooping(true);
-                        buttonrepeat.setBackgroundResource(R.drawable.ic_repeat_selected_icon);
+                        buttonRepeat.setBackgroundResource(R.drawable.ic_repeat_selected_icon);
                     }
                 }
 //                NotificationCompat.Builder builder = new NotificationCompat.Builder(MusicPlayerActivity.this, "notification");
@@ -293,7 +290,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
             }
         });
 
-        //still crashes
+
         mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
             @Override
             public void onCompletion(MediaPlayer mediaPlayer) {
@@ -305,17 +302,17 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
                     position = (position + random.nextInt(upperbound));
                     Uri u = Uri.parse(mySongs.get(position).toString());
                     mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                    sname = mySongs.get(position).getName().toString().replace(".mp3", "").replace(".wav", "");
-                    songnametext.setText(sname);
+                    songName = mySongs.get(position).getName().replace(".mp3", "").replace(".wav", "");
+                    songNameText.setText(songName);
                     mediaPlayer.start();
-                    buttonplay.setBackgroundResource(R.drawable.ic_pause_icon);
-                    startAnimation(songimageview);
+                    buttonPlay.setBackgroundResource(R.drawable.ic_pause_icon);
+                    startAnimation(songImageView);
 
                     startSeekbarUpdateThread();
 
                 }
                 else {
-                    skipsongnext.performClick();
+                    skipSongNext.performClick();
                 }
             }
         });
@@ -327,6 +324,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
         bottomNavigationView.setSelectedItemId(R.id.songPlayingButton);
 
         bottomNavigationView.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
+            @SuppressLint("NonConstantResourceId")
             @Override
             public boolean onNavigationItemSelected(@NonNull MenuItem item) {
 
@@ -410,9 +408,9 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
     BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            String action = intent.getExtras().getString("actionname");
+            String action = Objects.requireNonNull(intent.getExtras()).getString("actionname");
 
-            switch (action) {
+            switch (Objects.requireNonNull(action)) {
                 case CreateMusicNotification.SKIPSONGPREV:
                     onButtonPrevious();
                     break;
@@ -432,7 +430,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
     // animation method for song image
     public void startAnimation(View view)
     {
-        ObjectAnimator animator = ObjectAnimator.ofFloat(songimageview, "rotation", 0f, 360f);
+        ObjectAnimator animator = ObjectAnimator.ofFloat(songImageView, "rotation", 0f, 360f);
         animator.setDuration(1000);
         AnimatorSet animatorSet = new AnimatorSet();
         animatorSet.playTogether(animator);
@@ -467,33 +465,32 @@ public class MusicPlayerActivity extends AppCompatActivity implements Playable {
     @Override
     protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
         super.onRestoreInstanceState(savedInstanceState);
-        Bundle restoredData = savedInstanceState.getBundle("currentSongData");
-        bundle = restoredData;
+        bundle = savedInstanceState.getBundle("currentSongData");
     }
 
     @Override
     public void onButtonPrevious() {
         position--;
-        CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,
+        CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,
                 R.drawable.ic_pause_icon, position, mySongs.size() - 1);
     }
 
     @Override
     public void onButtonPlay() {
-        CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,
+        CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,
                 R.drawable.ic_pause_icon, position, mySongs.size() - 1);
     }
 
     @Override
     public void onButtonPause() {
-        CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,
+        CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,
                 R.drawable.ic_play_icon, position, mySongs.size() - 1);
     }
 
     @Override
     public void onButtonNext() {
         position++;
-        CreateMusicNotification.createNotification(MusicPlayerActivity.this, sname,
+        CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,
                 R.drawable.ic_pause_icon, position, mySongs.size() - 1);
     }
 
