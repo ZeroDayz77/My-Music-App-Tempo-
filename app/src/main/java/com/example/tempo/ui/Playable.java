@@ -1,4 +1,4 @@
-package com.example.tempo;
+package com.example.tempo.ui;
 
 public interface Playable {
     void onButtonPrevious();
@@ -6,3 +6,4 @@ public interface Playable {
     void onButtonPause();
     void onButtonNext();
 }
+

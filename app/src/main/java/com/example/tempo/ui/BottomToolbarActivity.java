@@ -1,5 +1,4 @@
-package com.example.tempo;
-
+package com.example.tempo.ui;
 
 import android.content.Context;
 import android.content.Intent;
@@ -18,49 +17,39 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.google.android.gms.ads.MobileAds;
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.AdView;
-
-
-
 public class BottomToolbarActivity extends AppCompatActivity {
+    // Use the shared player reference from MainActivity so nav checks are consistent
 
-    static MediaPlayer mediaPlayer;
     private AdView adView;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.bottom_tool_bar);
+        setContentView(com.example.tempo.R.layout.bottom_tool_bar);
 
         new Thread(
                 () -> {
-                    // Initialize the Google Mobile Ads SDK on a background thread.
                     MobileAds.initialize(this, initializationStatus -> {});
                 })
                 .start();
-        adView = findViewById(R.id.adView);
+        adView = findViewById(com.example.tempo.R.id.adView);
         AdRequest adRequest = new AdRequest.Builder().build();
         adView.loadAd(adRequest);
 
-        //allows for navigation between activities.
+        BottomNavigationView bottomNavigationView=findViewById(com.example.tempo.R.id.bottomToolBar);
 
-
-        BottomNavigationView bottomNavigationView=findViewById(R.id.bottomToolBar);
-
-        bottomNavigationView.setSelectedItemId(R.id.songLibraryButton);
+        bottomNavigationView.setSelectedItemId(com.example.tempo.R.id.songLibraryButton);
 
         bottomNavigationView.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
             @Override
             public boolean onNavigationItemSelected(@NonNull MenuItem item) {
 
                 switch (item.getItemId()) {
-                    case R.id.songLibraryButton:
+                    case com.example.tempo.R.id.songLibraryButton:
                         return true;
-                    case R.id.songPlayingButton:
+                    case com.example.tempo.R.id.songPlayingButton:
 
-                        if(mediaPlayer == null)
+                        if(com.example.tempo.ui.MainActivity.mediaPlayer == null)
                         {
                             Context context = getApplicationContext();
                             CharSequence text = "No song currently playing, please choose a song...";
@@ -71,13 +60,13 @@ public class BottomToolbarActivity extends AppCompatActivity {
                             return false;
                         }
 
-                        Intent musicPlayerActivity = (new Intent(getApplicationContext(), MusicPlayerActivity.class));
+                        Intent musicPlayerActivity = (new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class));
                         musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
                         startActivity(musicPlayerActivity);
                         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
                         return true;
-                    case R.id.playlistButton:
-                        startActivity(new Intent(getApplicationContext(),PlaylistsActivity.class));
+                    case com.example.tempo.R.id.playlistButton:
+                        startActivity(new Intent(getApplicationContext(),com.example.tempo.ui.PlaylistsActivity.class));
                         overridePendingTransition(0,0);
                         return true;
                 }
