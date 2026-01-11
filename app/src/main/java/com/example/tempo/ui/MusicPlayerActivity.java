@@ -3,22 +3,25 @@ package com.example.tempo.ui;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatButton;
+import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.content.ContextCompat;
 
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
-import android.annotation.SuppressLint;
+import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.content.BroadcastReceiver;
-import android.content.Context;
+import android.content.ComponentName;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.PorterDuff;
 import android.media.MediaPlayer;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageView;
@@ -26,27 +29,38 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
-import com.google.android.material.navigation.NavigationBarView;
+import com.example.tempo.Services.MediaPlaybackService;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Objects;
-import java.util.Random;
+
+import android.support.v4.media.MediaBrowserCompat;
+import android.support.v4.media.session.MediaControllerCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
+import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.MediaBrowserCompat.ConnectionCallback;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.IntentFilter;
 
 public class MusicPlayerActivity extends AppCompatActivity implements com.example.tempo.ui.Playable {
-    AppCompatButton buttonPlay, skipSongNext, skipSongPrev, buttonShuffle, buttonRepeat;
+    AppCompatButton buttonPlay, skipSongNext, skipSongPrev;
+    AppCompatImageButton buttonShuffle, buttonRepeat;
     TextView songNameText, songStartTime, songEndTime;
     SeekBar seekbar;
     ImageView songImageView;
     String songName;
-    NotificationManager notificationManager;
     MediaPlayer mediaPlayer;
+    MediaBrowserCompat mediaBrowser;
+    MediaControllerCompat mediaController;
     public static int position;
     public static boolean isShuffleToggled;
-    public static boolean isLoopToggled;
     public static ArrayList<File> mySongs;
-    Thread seekbarUpdate;
+    Handler seekHandler;
+    Runnable seekRunnable;
     public static Bundle bundle;
+    public static volatile boolean shouldAnimateMiniBarOnReturn = false;
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
@@ -82,299 +96,335 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
 
         seekbar = findViewById(com.example.tempo.R.id.seekbar);
 
-        if (mediaPlayer != null)
-        {
+        // Release any previous player instance
+        if (mediaPlayer != null) {
             mediaPlayer.stop();
             mediaPlayer.release();
+            mediaPlayer = null;
         }
 
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
-            NotificationChannel channel = new NotificationChannel("notification","notification", NotificationManager.IMPORTANCE_LOW);
+        // Create notification channel on O+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(MediaPlaybackService.CHANNEL_ID, "Playback", NotificationManager.IMPORTANCE_HIGH);
             NotificationManager manager = getSystemService(NotificationManager.class);
             channel.enableVibration(false);
             channel.setSound(null, null);
             channel.setShowBadge(false);
-            manager.createNotificationChannel(channel);
+            channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            if (manager != null) manager.createNotificationChannel(channel);
         }
 
+        // Hide shared mini now-playing bar when we're on the full player screen
+        View nowPlayingInclude = findViewById(com.example.tempo.R.id.nowPlayingInclude);
+        if (nowPlayingInclude != null) nowPlayingInclude.setVisibility(View.GONE);
+
+        // Safely load songs passed via Intent extras (supports Serializable fallback)
         Intent i = getIntent();
         bundle = i.getExtras();
+        String passedSongName = null;
+        // Support alternate keys from other activities
+        String altSongName = i.getStringExtra("song_name");
+        String altSongUri = i.getStringExtra("song_uri");
 
-        assert bundle != null;
-        mySongs = (ArrayList) bundle.getParcelableArrayList("songs");
-        position = bundle.getInt("pos", 0);
+        if (bundle != null) {
+            // prefer explicit song_name (from playlist) over songname
+            passedSongName = altSongName != null && !altSongName.isEmpty() ? altSongName : bundle.getString("songname");
+
+            Object songsObj = bundle.get("songs");
+            if (songsObj instanceof ArrayList) {
+                @SuppressWarnings("unchecked")
+                ArrayList<File> tmp = (ArrayList<File>) songsObj;
+                mySongs = tmp;
+            } else {
+                java.io.Serializable serial = bundle.getSerializable("songs");
+                if (serial instanceof ArrayList) {
+                    @SuppressWarnings("unchecked")
+                    ArrayList<File> tmp = (ArrayList<File>) serial;
+                    mySongs = tmp;
+                } else if (altSongUri != null && !altSongUri.isEmpty()) {
+                    // build a single-item playlist from the passed URI string
+                    mySongs = new ArrayList<>();
+                    mySongs.add(new File(altSongUri));
+                } else {
+                    mySongs = new ArrayList<>();
+                }
+            }
+            position = bundle.getInt("pos", 0);
+        } else if (altSongUri != null) {
+            // activity started with only a URI (playlist details)
+            mySongs = new ArrayList<>();
+            mySongs.add(new File(altSongUri));
+            passedSongName = altSongName != null ? altSongName : new File(altSongUri).getName();
+            position = 0;
+        } else {
+            mySongs = new ArrayList<>();
+            position = 0;
+        }
 
         songNameText.setSelected(true);
-        Uri uri = Uri.parse(mySongs.get(position).toString());
-        songName = mySongs.get(position).getName().replace( ".mp3", "").replace(".wav", "");
 
-        songNameText.setText(songName);
+        // If caller provided song name string, show it immediately to avoid placeholder on first tap
+        if (passedSongName != null && !passedSongName.isEmpty()) {
+            // If the caller passed a file path (e.g. File.toString()), extract the file name only
+            String displayName = passedSongName;
+            try {
+                java.io.File possibleFile = new java.io.File(passedSongName);
+                String nameOnly = possibleFile.getName();
+                if (!nameOnly.isEmpty()) displayName = nameOnly;
+            } catch (Exception ignored) {
+            }
 
-        mediaPlayer = MediaPlayer.create(getApplicationContext(), uri);
-        mediaPlayer.start();
-        // Shared static reference in MainActivity up-to-date so other activities
-        com.example.tempo.ui.MainActivity.mediaPlayer = mediaPlayer;
+            displayName = displayName.replace(".mp3", "").replace(".wav", "");
+            songName = displayName;
+            songNameText.setText(songName);
+        }
 
-        startSeekbarUpdateThread();
+        if (mySongs.isEmpty()) {
+            if (songName == null) songName = "";
+        } else {
+            if (songName == null || songName.isEmpty()) {
+                songName = mySongs.get(position).getName().replace(".mp3", "").replace(".wav", "");
+                songNameText.setText(songName);
+            }
+            // The service will manage playback and the notification. We will connect to it in onStart().
+        }
 
-        String endTime = createSongTime(mediaPlayer.getDuration());
-        songEndTime.setText(endTime);
-
-        final Handler handler = new Handler();
-        final int delay = 500;
-
-        handler.postDelayed(new Runnable() {
+        // Keep UI time labels updated
+        final Handler timeHandler = new Handler(Looper.getMainLooper());
+        final int timeDelay = 500;
+        timeHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                String currentTime = createSongTime(mediaPlayer.getCurrentPosition());
-                songStartTime.setText(currentTime);
-
-                String endTime = createSongTime(mediaPlayer.getDuration());
-                songEndTime.setText(endTime);
-
-                handler.postDelayed(this, delay);
+                try {
+                    if (mediaController != null) {
+                        PlaybackStateCompat state = mediaController.getPlaybackState();
+                        MediaMetadataCompat meta = mediaController.getMetadata();
+                        if (state != null) {
+                            long cur = state.getPosition();
+                            songStartTime.setText(createSongTime((int) cur));
+                        }
+                        if (meta != null) {
+                            long dur = meta.getLong(MediaMetadataCompat.METADATA_KEY_DURATION);
+                            songEndTime.setText(createSongTime((int) dur));
+                        }
+                    }
+                } catch (RuntimeException e) {
+                    Log.w("MusicPlayerActivity", "time handler safe-guard: controller unusable", e);
+                }
+                timeHandler.postDelayed(this, timeDelay);
             }
-        },delay);
+        }, timeDelay);
 
         // Play/pause, skip, shuffle, repeat handlers
-        buttonPlay.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if (mediaPlayer.isPlaying())
-                {
-                    buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_play_icon);
-                    com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,com.example.tempo.R.drawable.ic_play_icon, position, mySongs.size());
-                    mediaPlayer.pause();
-                    onButtonPause();
+        buttonPlay.setOnClickListener(view -> {
+            MediaControllerCompat controller = MediaControllerCompat.getMediaController(MusicPlayerActivity.this);
+            if (controller != null) {
+                PlaybackStateCompat state = controller.getPlaybackState();
+                if (state != null && state.getState() == PlaybackStateCompat.STATE_PLAYING) {
+                    controller.getTransportControls().pause();
                 } else {
-                    buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_pause_icon);
-                    com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,com.example.tempo.R.drawable.ic_play_icon, position, mySongs.size());
-                    mediaPlayer.start();
-                    onButtonPlay();
+                    controller.getTransportControls().play();
                 }
             }
         });
 
-        skipSongNext.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                mediaPlayer.stop();
-                mediaPlayer.release();
-                // release the player - clear shared reference before creating a new one
-                com.example.tempo.ui.MainActivity.mediaPlayer = null;
-                stopSeekbarUpdate();
-                position = ((position+1)%mySongs.size());
-                Uri u = Uri.parse(mySongs.get(position).toString());
-                mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                // update shared reference
-                com.example.tempo.ui.MainActivity.mediaPlayer = mediaPlayer;
-                songName = mySongs.get(position).getName().replace( ".mp3", "").replace(".wav", "");
-                songNameText.setText(songName);
-                mediaPlayer.start();
-                buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_pause_icon);
-                startAnimation(songImageView);
-
-                startSeekbarUpdateThread();
-                onButtonNext();
-
-                mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-                    @Override
-                    public void onCompletion(MediaPlayer mediaPlayer) {
-                        skipSongNext.performClick();
-                    }
-                });
-            }
+        skipSongNext.setOnClickListener(view -> {
+            MediaControllerCompat controller = MediaControllerCompat.getMediaController(MusicPlayerActivity.this);
+            if (controller != null) controller.getTransportControls().skipToNext();
         });
 
-        skipSongPrev.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                mediaPlayer.stop();
-                mediaPlayer.release();
-                com.example.tempo.ui.MainActivity.mediaPlayer = null;
-                stopSeekbarUpdate();
-                position = ((position-1)<0)?(mySongs.size()-1):(position-1);
-                Uri u = Uri.parse(mySongs.get(position).toString());
-                mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                com.example.tempo.ui.MainActivity.mediaPlayer = mediaPlayer;
-                songName = mySongs.get(position).getName().replace( ".mp3", "").replace(".wav", "");
-                songNameText.setText(songName);
-                mediaPlayer.start();
-                buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_pause_icon);
-                startAnimation(songImageView);
-
-                startSeekbarUpdateThread();
-                onButtonPrevious();
-            }
+        skipSongPrev.setOnClickListener(view -> {
+            MediaControllerCompat controller = MediaControllerCompat.getMediaController(MusicPlayerActivity.this);
+            if (controller != null) controller.getTransportControls().skipToPrevious();
         });
 
-        buttonShuffle.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
+        // Initialize shuffle/repeat icons and tints, then reflect service state
+        try {
+            int colorActive = ContextCompat.getColor(this, com.example.tempo.R.color.teal_700);
+            int colorInactive = ContextCompat.getColor(this, com.example.tempo.R.color.white);
 
-                if(!isShuffleToggled) {
-                    isShuffleToggled = true;
-                    buttonShuffle.setBackgroundResource(com.example.tempo.R.drawable.ic_shuffle_selected_icon);
-                }
-                else {
-                    isShuffleToggled = false;
-                    buttonShuffle.setBackgroundResource(com.example.tempo.R.drawable.ic_shuffle_icon);
-                }
+            // default unselected (white tint)
+            buttonShuffle.setImageResource(com.example.tempo.R.drawable.ic_shuffle_icon);
+            buttonShuffle.setImageTintList(ColorStateList.valueOf(colorInactive));
+            buttonRepeat.setImageResource(com.example.tempo.R.drawable.ic_repeat_icon);
+            buttonRepeat.setImageTintList(ColorStateList.valueOf(colorInactive));
+            isShuffleToggled = false;
 
+            // reflect service flags if active
+            if (com.example.tempo.Services.MediaPlaybackService.shuffleEnabled.get()) {
+                isShuffleToggled = true;
+                buttonShuffle.setImageResource(com.example.tempo.R.drawable.ic_shuffle_selected_icon);
+                buttonShuffle.setImageTintList(ColorStateList.valueOf(colorActive));
             }
+            if (com.example.tempo.Services.MediaPlaybackService.repeatEnabled.get()) {
+                buttonRepeat.setImageResource(com.example.tempo.R.drawable.ic_repeat_selected_icon);
+                buttonRepeat.setImageTintList(ColorStateList.valueOf(colorActive));
+            }
+        } catch (Exception ignored) {}
+
+        // Toggle shuffle via service intent so behavior is centralized
+        buttonShuffle.setOnClickListener(view -> {
+            Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE_SHUFFLE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), intent);
+            } else {
+                startService(intent);
+            }
+
+            isShuffleToggled = !isShuffleToggled;
+            int colorActive = ContextCompat.getColor(this, com.example.tempo.R.color.teal_700);
+            int colorInactive = ContextCompat.getColor(this, com.example.tempo.R.color.white);
+            if (isShuffleToggled) {
+                buttonShuffle.setImageResource(com.example.tempo.R.drawable.ic_shuffle_selected_icon);
+                buttonShuffle.setImageTintList(ColorStateList.valueOf(colorActive));
+            } else {
+                buttonShuffle.setImageResource(com.example.tempo.R.drawable.ic_shuffle_icon);
+                buttonShuffle.setImageTintList(ColorStateList.valueOf(colorInactive));
+            }
+            // small press animation to make change obvious
+            buttonShuffle.setScaleX(0.95f);
+            buttonShuffle.setScaleY(0.95f);
+            buttonShuffle.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+            buttonShuffle.invalidate();
+            buttonShuffle.requestLayout();
         });
 
-        buttonRepeat.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-
-                if (mediaPlayer!=null)
-                {
-                    if (mediaPlayer.isLooping())
-                    {
-                        mediaPlayer.setLooping(false);
-                        buttonRepeat.setBackgroundResource(com.example.tempo.R.drawable.ic_repeat_icon);
-                    }
-                    else
-                    {
-                        mediaPlayer.setLooping(true);
-                        buttonRepeat.setBackgroundResource(com.example.tempo.R.drawable.ic_repeat_selected_icon);
-                    }
-                }
+        buttonRepeat.setOnClickListener(view -> {
+            // Toggle repeat via service intent
+            Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE_REPEAT);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), intent);
+            } else {
+                startService(intent);
             }
+            // Toggle UI immediately; service will apply looping and is authoritative
+            boolean newRepeat = !(com.example.tempo.Services.MediaPlaybackService.repeatEnabled.get());
+            int colorActive = ContextCompat.getColor(this, com.example.tempo.R.color.teal_700);
+            int colorInactive = ContextCompat.getColor(this, com.example.tempo.R.color.white);
+            if (newRepeat) {
+                buttonRepeat.setImageResource(com.example.tempo.R.drawable.ic_repeat_selected_icon);
+                buttonRepeat.setImageTintList(ColorStateList.valueOf(colorActive));
+            } else {
+                buttonRepeat.setImageResource(com.example.tempo.R.drawable.ic_repeat_icon);
+                buttonRepeat.setImageTintList(ColorStateList.valueOf(colorInactive));
+            }
+            // small press animation
+            buttonRepeat.setScaleX(0.95f);
+            buttonRepeat.setScaleY(0.95f);
+            buttonRepeat.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+            buttonRepeat.invalidate();
+            buttonRepeat.requestLayout();
         });
 
-        mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-            @Override
-            public void onCompletion(MediaPlayer mediaPlayer) {
-                if(isShuffleToggled) {
-                    mediaPlayer.stop();
-                    mediaPlayer.release();
-                    Random random = new Random();
-                    int upperbound = mySongs.size();
-                    position = (position + random.nextInt(upperbound));
-                    Uri u = Uri.parse(mySongs.get(position).toString());
-                    mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                    songName = mySongs.get(position).getName().replace(".mp3", "").replace(".wav", "");
-                    songNameText.setText(songName);
-                    mediaPlayer.start();
-                    buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_pause_icon);
-                    startAnimation(songImageView);
-
-                    startSeekbarUpdateThread();
-
-                }
-                else {
-                    skipSongNext.performClick();
-                }
-            }
-        });
-
-        BottomNavigationView bottomNavigationView=findViewById(com.example.tempo.R.id.bottomToolBar);
-
+        BottomNavigationView bottomNavigationView = findViewById(com.example.tempo.R.id.bottomToolBar);
         bottomNavigationView.setSelectedItemId(com.example.tempo.R.id.songPlayingButton);
-
-        bottomNavigationView.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
-            @SuppressLint("NonConstantResourceId")
-            @Override
-            public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-
-                switch (item.getItemId()) {
-                    case com.example.tempo.R.id.songLibraryButton:
-                        startActivity(new Intent(getApplicationContext(), com.example.tempo.ui.MainActivity.class));
-                        overridePendingTransition(0,0);
-                        return true;
-                    case com.example.tempo.R.id.songPlayingButton:
-                        return true;
-                    case com.example.tempo.R.id.playlistButton:
-                        startActivity(new Intent(getApplicationContext(), com.example.tempo.ui.PlaylistsActivity.class));
-                        overridePendingTransition(0,0);
-                        return true;
-                }
-                return false;
+        bottomNavigationView.setOnItemSelectedListener(item -> {
+            int id = item.getItemId();
+            if (id == com.example.tempo.R.id.songLibraryButton) {
+                startActivity(new Intent(getApplicationContext(), com.example.tempo.ui.MainActivity.class));
+                overridePendingTransition(0, 0);
+                return true;
+            } else if (id == com.example.tempo.R.id.songPlayingButton) {
+                return true;
+            } else if (id == com.example.tempo.R.id.playlistButton) {
+                startActivity(new Intent(getApplicationContext(), com.example.tempo.ui.PlaylistsActivity.class));
+                overridePendingTransition(0, 0);
+                return true;
             }
+            return false;
         });
     }
 
     private void startSeekbarUpdateThread() {
-        seekbarUpdate = new Thread() {
+        // Use MediaController's playback state/metadata to update seekbar
+        // Ensure any previous handler is cleared
+        stopSeekbarUpdate();
+
+        seekHandler = new Handler(Looper.getMainLooper());
+        seekRunnable = new Runnable() {
             @Override
             public void run() {
-                while (true) { // Loop continuously until interrupted
-                    try {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                if (mediaPlayer != null) {
-                                    int totalSongDuration = mediaPlayer.getDuration();
-                                    int currentSongPosition = mediaPlayer.getCurrentPosition();
-                                    seekbar.setMax(totalSongDuration);
-                                    seekbar.setProgress(currentSongPosition);
-                                }
-                            }
-                        });
-                        Thread.sleep(500); // Update every 500 milliseconds
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                        break; // Break the loop when interrupted
+                try {
+                    if (mediaController != null) {
+                        PlaybackStateCompat state = mediaController.getPlaybackState();
+                        MediaMetadataCompat meta = mediaController.getMetadata();
+                        if (meta != null) {
+                            int dur = (int) meta.getLong(MediaMetadataCompat.METADATA_KEY_DURATION);
+                            seekbar.setMax(dur);
+                            songEndTime.setText(createSongTime(dur));
+                            // enable seekbar only when we have a valid duration
+                            seekbar.setEnabled(dur > 0);
+                        }
+                        if (state != null) {
+                            int pos = (int) state.getPosition();
+                            seekbar.setProgress(pos);
+                        }
                     }
+                } catch (RuntimeException e) {
+                    Log.w("MusicPlayerActivity", "seekbar updater safe-guard: controller unusable", e);
                 }
+                if (seekHandler != null) seekHandler.postDelayed(this, 500);
             }
         };
 
-        seekbar.setMax(mediaPlayer.getDuration());
-
-        seekbarUpdate.start();
+        // Start periodic updates
+        // Ensure the seekbar is interactive right away (even if metadata not available yet)
+        seekbar.setEnabled(true);
+        // Run one immediate update to initialize UI right away
+        seekHandler.post(seekRunnable);
 
         seekbar.getProgressDrawable().setColorFilter(getResources().getColor(com.example.tempo.R.color.white), PorterDuff.Mode.MULTIPLY);
         seekbar.getThumb().setColorFilter(getResources().getColor(com.example.tempo.R.color.teal_700), PorterDuff.Mode.SRC_IN);
 
         seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+             @Override
+             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
 
-            }
+             }
 
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
+             @Override
+             public void onStartTrackingTouch(SeekBar seekBar) {
 
-            }
+             }
 
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-                mediaPlayer.seekTo(seekBar.getProgress());
-            }
-        });
-    }
+             @Override
+             public void onStopTrackingTouch(SeekBar seekBar) {
+                int newPos = seekBar.getProgress();
+                // If we have a media controller, use it. Otherwise, forward to the service so the action still works.
+                if (mediaController != null) {
+                    try {
+                        mediaController.getTransportControls().seekTo(newPos);
+                    } catch (RuntimeException e) {
+                        Log.w("MusicPlayerActivity", "seek safe-guard: controller unusable", e);
+                    }
+                } else {
+                    // Send a service intent to perform the seek. Service should already be running when activity was opened.
+                    try {
+                        Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class)
+                                .setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_SEEK)
+                                .putExtra(com.example.tempo.Services.MediaPlaybackService.EXTRA_SEEK_POSITION, (long) newPos);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), intent);
+                        } else {
+                            startService(intent);
+                        }
+                    } catch (Exception e) {
+                        Log.w("MusicPlayerActivity", "seek forwarding failed", e);
+                    }
+                }
+                // update UI immediately so it doesn't snap back
+                seekbar.setProgress(newPos);
+             }
+         });
+     }
 
     private void stopSeekbarUpdate() {
-        if (seekbarUpdate != null && seekbarUpdate.isAlive()) {
-            seekbarUpdate.interrupt();
-            seekbar.setProgress(0);
+        if (seekHandler != null) {
+            seekHandler.removeCallbacks(seekRunnable);
+            seekHandler = null;
+            seekRunnable = null;
         }
     }
-
-    BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = Objects.requireNonNull(intent.getExtras()).getString("actionname");
-
-            switch (Objects.requireNonNull(action)) {
-                case com.example.tempo.ui.CreateMusicNotification.SKIPSONGPREV:
-                    onButtonPrevious();
-                    break;
-                case com.example.tempo.ui.CreateMusicNotification.BUTTONPLAY:
-                    if (mediaPlayer.isPlaying())
-                        onButtonPause();
-                    else
-                        onButtonPlay();
-                    break;
-                case com.example.tempo.ui.CreateMusicNotification.SKIPSONGNEXT:
-                    onButtonNext();
-                    break;
-            }
-        }
-    };
 
     public void startAnimation(View view)
     {
@@ -418,29 +468,19 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
     @Override
     public void onButtonPrevious() {
         position--;
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,
-                com.example.tempo.R.drawable.ic_pause_icon, position, mySongs.size() - 1);
-        // Ensure shared position/state is in sync
-        // MainActivity.mediaPlayer is kept in sync when we create/release the player
     }
 
     @Override
     public void onButtonPlay() {
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,
-                com.example.tempo.R.drawable.ic_pause_icon, position, mySongs.size() - 1);
     }
 
     @Override
     public void onButtonPause() {
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,
-                com.example.tempo.R.drawable.ic_play_icon, position, mySongs.size() - 1);
     }
 
     @Override
     public void onButtonNext() {
         position++;
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,
-                com.example.tempo.R.drawable.ic_pause_icon, position, mySongs.size() - 1);
     }
 
     @Override
@@ -450,8 +490,171 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void onBackPressed() {
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         super.onBackPressed();
     }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // restart seekbar update thread if needed (use MediaController)
+        if (mediaController != null) {
+            if (seekHandler == null) startSeekbarUpdateThread();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Stop seekbar updates to avoid background thread accessing released objects
+        stopSeekbarUpdate();
+        // Notify other activities to animate the mini bar when they become visible again
+        shouldAnimateMiniBarOnReturn = true;
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        // Unregister receiver for playback options
+        try { unregisterReceiver(playbackOptionsReceiver); } catch (Exception ignored) {}
+        // Disconnect from the media browser service
+        if (mediaBrowser != null) {
+            mediaBrowser.disconnect();
+            mediaBrowser = null;
+        }
+        if (mediaController != null) {
+            mediaController.unregisterCallback(controllerCallback);
+            mediaController = null;
+        }
+        stopSeekbarUpdate();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        // Connect to the media browser service
+        mediaBrowser = new MediaBrowserCompat(this, new ComponentName(this, com.example.tempo.Services.MediaPlaybackService.class),
+                new ConnectionCallback() {
+                    @Override
+                    public void onConnected() {
+                        // We are connected to the media service
+                        mediaController = new MediaControllerCompat(MusicPlayerActivity.this, mediaBrowser.getSessionToken());
+                        MediaControllerCompat.setMediaController(MusicPlayerActivity.this, mediaController);
+
+                        // Update UI with current metadata
+                        MediaMetadataCompat metadata = mediaController.getMetadata();
+                        if (metadata != null) {
+                            songName = metadata.getString(MediaMetadataCompat.METADATA_KEY_TITLE);
+                            songNameText.setText(songName);
+                        }
+
+                        // Initialize seekbar immediately so it's usable even before playback state changes
+                        startSeekbarUpdateThread();
+
+                        // Start the playback if there is a song loaded
+                        if (mySongs != null && !mySongs.isEmpty()) {
+                            mediaController.getTransportControls().play();
+                        }
+
+                        // Register callback to receive updates
+                        mediaController.registerCallback(controllerCallback);
+                    }
+
+                    @Override
+                    public void onConnectionSuspended() {
+                        super.onConnectionSuspended();
+                        // Connection to the media service was suspended
+                        mediaController = null;
+                    }
+
+                    @Override
+                    public void onConnectionFailed() {
+                        super.onConnectionFailed();
+                        // Connection to the media service failed
+                        mediaController = null;
+                    }
+                }, null);
+        mediaBrowser.connect();
+        // Register receiver for playback options (shuffle/repeat changes)
+        try {
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(com.example.tempo.Services.MediaPlaybackService.ACTION_SHUFFLE_CHANGED);
+            filter.addAction(com.example.tempo.Services.MediaPlaybackService.ACTION_REPEAT_CHANGED);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(playbackOptionsReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(playbackOptionsReceiver, filter);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private final MediaControllerCompat.Callback controllerCallback = new MediaControllerCompat.Callback() {
+        @Override
+        public void onMetadataChanged(MediaMetadataCompat metadata) {
+            super.onMetadataChanged(metadata);
+            if (metadata != null) {
+                songName = metadata.getString(MediaMetadataCompat.METADATA_KEY_TITLE);
+                songNameText.setText(songName);
+            }
+        }
+
+        @Override
+        public void onPlaybackStateChanged(PlaybackStateCompat state) {
+            super.onPlaybackStateChanged(state);
+            runOnUiThread(() -> {
+                if (state != null && state.getState() == PlaybackStateCompat.STATE_PLAYING) {
+                    buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_pause_icon);
+                    startAnimation(songImageView);
+                    startSeekbarUpdateThread();
+                } else {
+                    buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_play_icon);
+                    // Keep seekbar showing current position while paused; do not stop updates here.
+                }
+
+                // Also refresh shuffle/repeat visuals from authoritative service state
+                try {
+                    boolean shuffleOn = com.example.tempo.Services.MediaPlaybackService.shuffleEnabled.get();
+                    boolean repeatOn = com.example.tempo.Services.MediaPlaybackService.repeatEnabled.get();
+                    int colorActive = ContextCompat.getColor(MusicPlayerActivity.this, com.example.tempo.R.color.teal_700);
+                    int colorInactive = ContextCompat.getColor(MusicPlayerActivity.this, com.example.tempo.R.color.white);
+                    buttonShuffle.setImageResource(shuffleOn ? com.example.tempo.R.drawable.ic_shuffle_selected_icon : com.example.tempo.R.drawable.ic_shuffle_icon);
+                    buttonShuffle.setImageTintList(ColorStateList.valueOf(shuffleOn ? colorActive : colorInactive));
+                    buttonRepeat.setImageResource(repeatOn ? com.example.tempo.R.drawable.ic_repeat_selected_icon : com.example.tempo.R.drawable.ic_repeat_icon);
+                    buttonRepeat.setImageTintList(ColorStateList.valueOf(repeatOn ? colorActive : colorInactive));
+                } catch (Exception ignored) {}
+            });
+         }
+     };
+
+    // Register/unregister receiver for shuffle/repeat changes
+    private final BroadcastReceiver playbackOptionsReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent != null) {
+                String action = intent.getAction();
+                if (com.example.tempo.Services.MediaPlaybackService.ACTION_SHUFFLE_CHANGED.equals(action)) {
+                    // Update shuffle button state
+                    boolean shuffleEnabled = com.example.tempo.Services.MediaPlaybackService.shuffleEnabled.get();
+                    buttonShuffle.setImageResource(shuffleEnabled ? com.example.tempo.R.drawable.ic_shuffle_selected_icon : com.example.tempo.R.drawable.ic_shuffle_icon);
+                    int colorActive = ContextCompat.getColor(context, com.example.tempo.R.color.teal_700);
+                    int colorInactive = ContextCompat.getColor(context, com.example.tempo.R.color.white);
+                    buttonShuffle.setImageTintList(ColorStateList.valueOf(shuffleEnabled ? colorActive : colorInactive));
+                } else if (com.example.tempo.Services.MediaPlaybackService.ACTION_REPEAT_CHANGED.equals(action)) {
+                    // Update repeat button state
+                    boolean repeatEnabled = com.example.tempo.Services.MediaPlaybackService.repeatEnabled.get();
+                    buttonRepeat.setImageResource(repeatEnabled ? com.example.tempo.R.drawable.ic_repeat_selected_icon : com.example.tempo.R.drawable.ic_repeat_icon);
+                    int colorActive = ContextCompat.getColor(context, com.example.tempo.R.color.teal_700);
+                    int colorInactive = ContextCompat.getColor(context, com.example.tempo.R.color.white);
+                    buttonRepeat.setImageTintList(ColorStateList.valueOf(repeatEnabled ? colorActive : colorInactive));
+                }
+            }
+        }
+    };
 }

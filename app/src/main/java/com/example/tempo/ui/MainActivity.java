@@ -3,10 +3,10 @@ package com.example.tempo.ui;
 import android.Manifest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Bundle;
@@ -15,8 +15,13 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
+import android.view.animation.AccelerateDecelerateInterpolator;
+import android.support.v4.media.MediaBrowserCompat;
+import android.support.v4.media.session.MediaControllerCompat;
+import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
 import android.widget.BaseAdapter;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -26,10 +31,13 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.example.tempo.Services.OnClearRecentService;
+import com.example.tempo.Services.MediaPlaybackService;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
-import com.google.android.material.navigation.NavigationBarView;
+
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.PermissionToken;
 import com.karumi.dexter.listener.PermissionDeniedResponse;
@@ -45,6 +53,9 @@ import java.util.Objects;
 
 import androidx.appcompat.app.AlertDialog;
 import android.widget.EditText;
+import android.text.SpannableString;
+import android.text.style.ForegroundColorSpan;
+import android.content.res.Configuration;
 
 import com.example.tempo.repo.PlaylistRepository;
 import com.example.tempo.data.Playlist;
@@ -57,10 +68,15 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
     ArrayList<File> filterList;
     boolean isSearchActive = false;
     ArrayList<File> mySongs;
-    static MediaPlayer mediaPlayer;
+    public static MediaPlayer mediaPlayer;
     NotificationManager notificationManager;
 
     private PlaylistRepository playlistRepository;
+
+    private static final int REQUEST_CODE_POST_NOTIFICATIONS = 9001;
+
+    MediaBrowserCompat mediaBrowser; // for mini-bar live updates
+    private boolean skipShowAnimation = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,13 +89,7 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             createChannel();
-            IntentFilter filter = new IntentFilter("SONG_CURRENTSONG");
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-
-                registerReceiver(broadcastReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
-            } else {
-                registerReceiver(broadcastReceiver, filter);
-            }
+            // clear-recent service (keeps app from restarting unexpectedly)
             startService(new Intent(getBaseContext(), OnClearRecentService.class));
         }
 
@@ -100,6 +110,81 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
 
         BottomNavigationView bottomNavigationView = findViewById(com.example.tempo.R.id.bottomToolBar);
 
+        // Now-playing mini bar
+        TextView nowPlayingTitle = findViewById(com.example.tempo.R.id.nowPlayingTitle);
+        View nowPlayingClickable = findViewById(com.example.tempo.R.id.nowPlayingClickable);
+        // initial visibility — toggle the whole include so it's fully hidden/shown
+        View nowPlayingInclude = findViewById(com.example.tempo.R.id.nowPlayingInclude);
+        // Decide whether to skip animation or animate based on whether we are returning from the full player
+        boolean returningFromPlayer = com.example.tempo.ui.MusicPlayerActivity.shouldAnimateMiniBarOnReturn;
+        // If returning from player, we want to animate the mini bar in; otherwise show immediately if service active
+        skipShowAnimation = !returningFromPlayer && com.example.tempo.Services.MediaPlaybackService.isActive;
+        if (nowPlayingInclude != null) {
+            if (skipShowAnimation && com.example.tempo.Services.MediaPlaybackService.currentTitle != null && !com.example.tempo.Services.MediaPlaybackService.currentTitle.isEmpty()) {
+                nowPlayingInclude.setVisibility(View.VISIBLE);
+                nowPlayingTitle.setText(com.example.tempo.Services.MediaPlaybackService.currentTitle);
+            } else {
+                nowPlayingInclude.setVisibility(View.GONE);
+            }
+        }
+        // Clear the return flag so we don't animate on subsequent activity switches
+        if (returningFromPlayer) com.example.tempo.ui.MusicPlayerActivity.shouldAnimateMiniBarOnReturn = false;
+
+        nowPlayingClickable.setOnClickListener(v -> {
+            if (!com.example.tempo.Services.MediaPlaybackService.isActive) return;
+            if (nowPlayingInclude != null && nowPlayingInclude.getVisibility() == View.VISIBLE) {
+                // animate out then open player
+                nowPlayingInclude.animate().translationY(nowPlayingInclude.getHeight()).alpha(0f).setDuration(180).withEndAction(() -> {
+                    nowPlayingInclude.setVisibility(View.GONE);
+                    Intent musicPlayerActivity = new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class);
+                    musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                    startActivity(musicPlayerActivity);
+                    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+                }).start();
+            } else {
+                Intent musicPlayerActivity = new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class);
+                musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                startActivity(musicPlayerActivity);
+                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+            }
+        });
+
+        // now-playing controls (safe: nowPlayingInclude may be null if not inflated)
+        ImageButton nowPrev = findViewById(com.example.tempo.R.id.nowPrev);
+        ImageButton nowPlayPause = findViewById(com.example.tempo.R.id.nowPlayPause);
+        ImageButton nowNext = findViewById(com.example.tempo.R.id.nowNext);
+
+        // initialize icons based on service state
+        if (com.example.tempo.Services.MediaPlaybackService.isPlaying) {
+            nowPlayPause.setImageResource(com.example.tempo.R.drawable.ic_pause_icon);
+        } else {
+            nowPlayPause.setImageResource(com.example.tempo.R.drawable.ic_play_icon);
+        }
+
+        nowPrev.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PREV)));
+        nowNext.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_NEXT)));
+        nowPlayPause.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE)));
+
+        // Setup MediaBrowser to receive live updates for now-playing mini bar
+        mediaBrowser = new MediaBrowserCompat(this, new ComponentName(this, com.example.tempo.Services.MediaPlaybackService.class),
+                new MediaBrowserCompat.ConnectionCallback() {
+                    @Override
+                    public void onConnected() {
+                        try {
+                            MediaControllerCompat controller = new MediaControllerCompat(MainActivity.this, mediaBrowser.getSessionToken());
+                            MediaControllerCompat.setMediaController(MainActivity.this, controller);
+                            // initialize bar from current metadata/state
+                            MediaMetadataCompat meta = controller.getMetadata();
+                            PlaybackStateCompat state = controller.getPlaybackState();
+                            runOnUiThread(() -> updateMiniBarFromController(meta, state));
+                            controller.registerCallback(controllerCallback);
+                        } catch (Exception e) {
+                            // ignore
+                        }
+                    }
+                }, null);
+        mediaBrowser.connect();
+
         bottomNavigationView.setSelectedItemId(com.example.tempo.R.id.songLibraryButton);
 
         bottomNavigationView.setOnItemSelectedListener(item -> {
@@ -107,7 +192,8 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
             if (id == com.example.tempo.R.id.songLibraryButton) {
                 return true;
             } else if (id == com.example.tempo.R.id.songPlayingButton) {
-                if (mediaPlayer == null) {
+                // Show player if the playback service is active (playlist loaded/playing or paused)
+                if (!com.example.tempo.Services.MediaPlaybackService.isActive) {
                     Toast.makeText(getApplicationContext(), "No song currently playing, please choose a song...", Toast.LENGTH_SHORT).show();
                     return false;
                 }
@@ -128,7 +214,7 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
 
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(com.example.tempo.ui.CreateMusicNotification.CHANNEL_ID, "notification", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel channel = new NotificationChannel(MediaPlaybackService.CHANNEL_ID, "Playback", NotificationManager.IMPORTANCE_HIGH);
             notificationManager = getSystemService(NotificationManager.class);
 
             if (notificationManager != null) {
@@ -138,6 +224,7 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
             channel.enableVibration(false);
             channel.setSound(null, null);
             channel.setShowBadge(false);
+            channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
         }
     }
 
@@ -200,6 +287,12 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
                     @Override
                     public void onPermissionGranted(PermissionGrantedResponse permissionGrantedResponse) {
                         displaySongs();
+                        // Request notification permission on Android 13+
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_CODE_POST_NOTIFICATIONS);
+                            }
+                        }
                     }
 
                     @Override
@@ -212,6 +305,18 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
                         permissionToken.continuePermissionRequest();
                     }
                 }).check();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CODE_POST_NOTIFICATIONS) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.d("MainActivity", "POST_NOTIFICATIONS permission granted");
+            } else {
+                Log.d("MainActivity", "POST_NOTIFICATIONS permission denied");
+            }
+        }
     }
 
     private ArrayList<File> filter(String newText) {
@@ -285,14 +390,24 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
                 mediaPlayer = null;
             }
 
-            String songName = (listView.getItemAtPosition(i).toString());
+            // Start playback via the MediaPlaybackService (service owns MediaPlayer & notification)
+            ArrayList<File> playList = mySongs;
+            Intent serviceIntent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class)
+                    .setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PLAY)
+                    .putExtra(com.example.tempo.Services.MediaPlaybackService.EXTRA_PLAYLIST, playList)
+                    .putExtra(com.example.tempo.Services.MediaPlaybackService.EXTRA_POSITION, position);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+
+            // Open player UI (activity will connect to the service)
+            String songName = mySongs.get(position).getName().replace(".mp3", "").replace(".wav", "");
             startActivity(new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class)
-                    .putExtra("songs", mySongs)
                     .putExtra("songname", songName)
                     .putExtra("pos", position));
             overridePendingTransition(0, 0);
-
-            com.example.tempo.ui.CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(com.example.tempo.ui.MusicPlayerActivity.position).getName().replace(".mp3", "").replace(".wav", ""), com.example.tempo.R.drawable.ic_play_icon, com.example.tempo.ui.MusicPlayerActivity.position, mySongs.size());
         });
 
         listView.setOnItemLongClickListener((parent, view, position, id) -> {
@@ -310,12 +425,12 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
 
         CharSequence[] options = names.toArray(new CharSequence[0]);
 
-        new AlertDialog.Builder(this)
+        AlertDialog parentDlg = new AlertDialog.Builder(this)
                 .setTitle("Add to playlist")
                 .setItems(options, (dialog, which) -> {
                     if (which == playlists.size()) {
                         final EditText input = new EditText(MainActivity.this);
-                        new AlertDialog.Builder(MainActivity.this)
+                        AlertDialog createDlg = new AlertDialog.Builder(MainActivity.this)
                                 .setTitle("Create Playlist")
                                 .setView(input)
                                 .setPositiveButton("Create", (d, w) -> {
@@ -332,6 +447,10 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
                                 })
                                 .setNegativeButton("Cancel", null)
                                 .show();
+                        try {
+                            createDlg.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(getResources().getColor(android.R.color.white));
+                            createDlg.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(getResources().getColor(android.R.color.white));
+                        } catch (Exception ignored) {}
                     } else {
                         Playlist chosen = playlists.get(which);
                         if (playlistRepository.isSongInPlaylist(chosen.getId(), file.getAbsolutePath())) {
@@ -343,23 +462,25 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
                     }
                 })
                 .show();
-    }
+        try {
+            parentDlg.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(getResources().getColor(android.R.color.white));
+            parentDlg.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(getResources().getColor(android.R.color.white));
+        } catch (Exception ignored) {}
 
-    BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (intent == null || intent.getExtras() == null) return;
-            String action = intent.getExtras().getString("actionname");
-            // Placeholder: react to broadcast actions if needed
+        // Set dialog title color to white in night mode
+        if ((getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES) {
+            SpannableString title = new SpannableString("Add to playlist");
+            title.setSpan(new ForegroundColorSpan(getResources().getColor(android.R.color.white)), 0, title.length(), 0);
+            parentDlg.setTitle(title);
         }
-    };
+    }
 
     public class customAdapter extends BaseAdapter {
         public ArrayList<File> adapterList;
         private final Context ctx;
 
         public customAdapter(ArrayList<File> list) {
-            this.adapterList = list != null ? list : new ArrayList<File>();
+            this.adapterList = list != null ? list : new ArrayList<>();
             this.ctx = MainActivity.this;
         }
 
@@ -408,28 +529,26 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
 
     @Override
     public void onButtonPrevious() {
-        com.example.tempo.ui.MusicPlayerActivity.position--;
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(com.example.tempo.ui.MusicPlayerActivity.position).getName().replace(".mp3", "").replace(".wav", ""),
-                com.example.tempo.R.drawable.ic_pause_icon, com.example.tempo.ui.MusicPlayerActivity.position, mySongs.size() - 1);
+        Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PREV);
+        startService(intent);
     }
 
     @Override
     public void onButtonPlay() {
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(com.example.tempo.ui.MusicPlayerActivity.position).getName().replace(".mp3", "").replace(".wav", ""),
-                com.example.tempo.R.drawable.ic_pause_icon, com.example.tempo.ui.MusicPlayerActivity.position, mySongs.size() - 1);
+        Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE);
+        startService(intent);
     }
 
     @Override
     public void onButtonPause() {
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(com.example.tempo.ui.MusicPlayerActivity.position).getName().replace(".mp3", "").replace(".wav", ""),
-                com.example.tempo.R.drawable.ic_play_icon, com.example.tempo.ui.MusicPlayerActivity.position, mySongs.size() - 1);
+        Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PAUSE);
+        startService(intent);
     }
 
     @Override
     public void onButtonNext() {
-        com.example.tempo.ui.MusicPlayerActivity.position++;
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(com.example.tempo.ui.MusicPlayerActivity.position).getName().replace(".mp3", "").replace(".wav", ""),
-                com.example.tempo.R.drawable.ic_pause_icon, com.example.tempo.ui.MusicPlayerActivity.position, mySongs.size() - 1);
+        Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_NEXT);
+        startService(intent);
     }
 
     @Override
@@ -438,11 +557,16 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (notificationManager != null) notificationManager.cancelAll();
         }
-
         try {
-            unregisterReceiver(broadcastReceiver);
-        } catch (IllegalArgumentException ignored) {
-        }
+            MediaControllerCompat controller = MediaControllerCompat.getMediaController(MainActivity.this);
+            if (controller != null) controller.unregisterCallback(controllerCallback);
+        } catch (Exception ignored) {}
+        try {
+            if (mediaBrowser != null && mediaBrowser.isConnected()) {
+                mediaBrowser.disconnect();
+                mediaBrowser = null;
+            }
+        } catch (Exception ignored) {}
     }
 
 
@@ -456,5 +580,64 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
     public void onBackPressed() {
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         super.onBackPressed();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // update now-playing bar
+        TextView nowPlayingTitle = findViewById(com.example.tempo.R.id.nowPlayingTitle);
+        View nowPlayingClickable = findViewById(com.example.tempo.R.id.nowPlayingClickable);
+        if (com.example.tempo.Services.MediaPlaybackService.isActive) {
+            nowPlayingTitle.setText(com.example.tempo.Services.MediaPlaybackService.currentTitle);
+            nowPlayingTitle.setVisibility(View.VISIBLE);
+            nowPlayingClickable.setVisibility(View.VISIBLE);
+        } else {
+            nowPlayingTitle.setVisibility(View.GONE);
+            nowPlayingClickable.setVisibility(View.GONE);
+        }
+    }
+
+    private final MediaControllerCompat.Callback controllerCallback = new MediaControllerCompat.Callback() {
+        @Override
+        public void onMetadataChanged(MediaMetadataCompat metadata) {
+            runOnUiThread(() -> updateMiniBarFromController(metadata, MediaControllerCompat.getMediaController(MainActivity.this).getPlaybackState()));
+        }
+
+        @Override
+        public void onPlaybackStateChanged(PlaybackStateCompat state) {
+            runOnUiThread(() -> updateMiniBarFromController(MediaControllerCompat.getMediaController(MainActivity.this).getMetadata(), state));
+        }
+    };
+
+    private void updateMiniBarFromController(MediaMetadataCompat meta, PlaybackStateCompat state) {
+        View include = findViewById(com.example.tempo.R.id.nowPlayingInclude);
+        TextView title = findViewById(com.example.tempo.R.id.nowPlayingTitle);
+        ImageButton playBtn = findViewById(com.example.tempo.R.id.nowPlayPause);
+        if (meta == null || state == null || include == null || title == null || playBtn == null) {
+            if (include != null) include.setVisibility(View.GONE);
+            return;
+        }
+
+        String t = meta.getString(MediaMetadataCompat.METADATA_KEY_TITLE);
+        boolean playing = state.getState() == PlaybackStateCompat.STATE_PLAYING;
+
+        title.setText(t != null ? t : "");
+
+        // update icon
+        playBtn.setImageResource(playing ? com.example.tempo.R.drawable.ic_pause_icon : com.example.tempo.R.drawable.ic_play_icon);
+
+        // show/hide with animation, but skip animation on initial startup when requested
+        if (include.getVisibility() != View.VISIBLE) {
+            if (skipShowAnimation) {
+                include.setVisibility(View.VISIBLE);
+                skipShowAnimation = false;
+            } else {
+                include.setVisibility(View.VISIBLE);
+                include.setTranslationY(include.getHeight());
+                include.setAlpha(0f);
+                include.animate().translationY(0).alpha(1f).setDuration(250).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+            }
+        }
     }
 }

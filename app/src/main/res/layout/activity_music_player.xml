@@ -7,7 +7,7 @@
     android:background="@drawable/music_player_background"
     android:orientation="vertical"
     android:weightSum="10"
-    tools:context=".MusicPlayerActivity">
+    tools:context=".ui.MusicPlayerActivity">
 
 
     <include layout="@layout/appbar"/>
@@ -104,7 +104,7 @@
                 tools:ignore="SpeakableTextPresentCheck">
 
             </androidx.appcompat.widget.AppCompatButton>
-            //play button
+<!--            // play button-->
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/skipsongnext"
@@ -116,7 +116,7 @@
                 android:background="@drawable/ic_skip_next_icon">
 
             </androidx.appcompat.widget.AppCompatButton>
-            // skip next
+<!--            // skip next-->
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/skipsongprev"
@@ -128,9 +128,9 @@
                 android:background="@drawable/ic_skip_previous_icon">
 
             </androidx.appcompat.widget.AppCompatButton>
-            // skip back
+<!--            // skip back-->
 
-            <androidx.appcompat.widget.AppCompatButton
+            <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/buttonshuffle"
                 android:layout_width="30dp"
                 android:layout_height="30dp"
@@ -138,13 +138,11 @@
                 android:layout_marginTop="20dp"
                 android:layout_marginRight="10dp"
                 android:layout_toLeftOf="@id/skipsongprev"
-                android:background="@drawable/ic_shuffle_icon"
-                tools:ignore="TouchTargetSizeCheck">
+                android:src="@drawable/ic_shuffle_icon"
+                android:background="@android:color/transparent"
+                tools:ignore="TouchTargetSizeCheck" />
 
-            </androidx.appcompat.widget.AppCompatButton>
-            // shuffle
-
-            <androidx.appcompat.widget.AppCompatButton
+            <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/buttonrepeat"
                 android:layout_width="30dp"
                 android:layout_height="30dp"
@@ -152,14 +150,12 @@
                 android:layout_marginLeft="10dp"
                 android:layout_marginTop="20dp"
                 android:layout_toRightOf="@id/skipsongnext"
-                android:background="@drawable/ic_repeat_icon">
+                android:src="@drawable/ic_repeat_icon"
+                android:background="@android:color/transparent" />
 
-            </androidx.appcompat.widget.AppCompatButton>
-            // repeat single song
+         </RelativeLayout>
 
-        </RelativeLayout>
-
-    </LinearLayout>
+     </LinearLayout>
 
     <LinearLayout
         android:layout_weight="1"

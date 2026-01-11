@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/music_player_background"
-    tools:context=".MainActivity">
+    tools:context=".ui.MainActivity">
 
     <include layout="@layout/appbar" />
 
@@ -20,6 +20,7 @@
         android:padding="8dp">
 
     </ListView>
+
 
     <include layout="@layout/bottom_tool_bar" />
 

@@ -105,5 +105,13 @@ public class PlaylistRepository {
         db.close();
         return found;
     }
-}
 
+    public boolean renamePlaylist(int playlistId, String newName) {
+        SQLiteDatabase db = dbHelper.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(TempoSongPlaylistDatabase.COLUMN_PLAYLIST_NAME, newName);
+        int rows = db.update(TempoSongPlaylistDatabase.TABLE_PLAYLISTS, values, TempoSongPlaylistDatabase.COLUMN_PLAYLIST_ID + "=?", new String[]{String.valueOf(playlistId)});
+        db.close();
+        return rows > 0;
+    }
+}
