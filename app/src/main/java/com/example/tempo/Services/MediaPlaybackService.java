@@ -62,6 +62,7 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
     // This is a simple process-global flag other Activities can check to know whether
     public static volatile boolean isActive = false;
     public static volatile String currentTitle = "";
+    public static volatile boolean isPlaying = false;
 
     private final BroadcastReceiver noisyReceiver = new BroadcastReceiver() {
         @Override
@@ -247,6 +248,7 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
             startForegroundNotification();
             isActive = true; // Set the active flag
             currentTitle = title; // Set the current title
+            isPlaying = true; // Set the playing flag
 
         } catch (Exception e) {
             Log.e(TAG, "playCurrent error", e);
@@ -372,6 +374,7 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
         try { audioManager.abandonAudioFocus(afChangeListener); } catch (Exception ignored) {}
         isActive = false; // Clear the active flag
         currentTitle = ""; // Clear the current title
+        isPlaying = false; // Clear the playing flag
         stopSelf();
     }
 

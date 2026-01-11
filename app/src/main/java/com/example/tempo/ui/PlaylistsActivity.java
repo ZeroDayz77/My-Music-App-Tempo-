@@ -1,13 +1,15 @@
 package com.example.tempo.ui;
 
-import android.content.Context;
+import android.content.ComponentName;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.widget.AdapterView;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -27,6 +29,11 @@ import com.google.android.material.navigation.NavigationBarView;
 import java.util.ArrayList;
 import java.util.Objects;
 
+import android.support.v4.media.MediaBrowserCompat;
+import android.support.v4.media.session.MediaControllerCompat;
+import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
+
 public class PlaylistsActivity extends AppCompatActivity {
     private Toolbar toolbar;
 
@@ -37,6 +44,8 @@ public class PlaylistsActivity extends AppCompatActivity {
 
     private ArrayList<Playlist> playlists;
     private PlaylistAdapter playlistAdapter;
+
+    MediaBrowserCompat mediaBrowser;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -128,14 +137,25 @@ public class PlaylistsActivity extends AppCompatActivity {
         // now-playing mini bar (shared via bottom toolbar include)
         TextView nowPlayingTitle = findViewById(com.example.tempo.R.id.nowPlayingTitle);
         View nowPlayingClickable = findViewById(com.example.tempo.R.id.nowPlayingClickable);
-        if (com.example.tempo.Services.MediaPlaybackService.isActive) {
-            nowPlayingTitle.setText(com.example.tempo.Services.MediaPlaybackService.currentTitle);
-            nowPlayingTitle.setVisibility(View.VISIBLE);
-            nowPlayingClickable.setVisibility(View.VISIBLE);
-        } else {
-            nowPlayingTitle.setVisibility(View.GONE);
-            nowPlayingClickable.setVisibility(View.GONE);
-        }
+        View nowPlayingInclude = findViewById(com.example.tempo.R.id.nowPlayingInclude);
+        if (nowPlayingInclude != null) nowPlayingInclude.setVisibility(View.GONE);
+
+        // Setup media browser for live updates
+        mediaBrowser = new MediaBrowserCompat(this, new ComponentName(this, com.example.tempo.Services.MediaPlaybackService.class),
+                new MediaBrowserCompat.ConnectionCallback() {
+                    @Override
+                    public void onConnected() {
+                        try {
+                            MediaControllerCompat controller = new MediaControllerCompat(PlaylistsActivity.this, mediaBrowser.getSessionToken());
+                            MediaControllerCompat.setMediaController(PlaylistsActivity.this, controller);
+                            MediaMetadataCompat meta = controller.getMetadata();
+                            PlaybackStateCompat state = controller.getPlaybackState();
+                            runOnUiThread(() -> updateMiniBarFromController(meta, state));
+                            controller.registerCallback(controllerCallback);
+                        } catch (Exception ignored) {}
+                    }
+                }, null);
+        mediaBrowser.connect();
 
         nowPlayingClickable.setOnClickListener(v -> {
             if (com.example.tempo.Services.MediaPlaybackService.isActive) {
@@ -145,6 +165,20 @@ public class PlaylistsActivity extends AppCompatActivity {
                 overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
             }
         });
+
+        ImageButton nowPrev = findViewById(com.example.tempo.R.id.nowPrev);
+        ImageButton nowPlayPause = findViewById(com.example.tempo.R.id.nowPlayPause);
+        ImageButton nowNext = findViewById(com.example.tempo.R.id.nowNext);
+
+        if (com.example.tempo.Services.MediaPlaybackService.isPlaying) {
+            nowPlayPause.setImageResource(com.example.tempo.R.drawable.ic_pause_icon);
+        } else {
+            nowPlayPause.setImageResource(com.example.tempo.R.drawable.ic_play_icon);
+        }
+
+        nowPrev.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PREV)));
+        nowNext.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_NEXT)));
+        nowPlayPause.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE)));
     }
 
     private void loadPlaylists() {
@@ -173,6 +207,51 @@ public class PlaylistsActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private final MediaControllerCompat.Callback controllerCallback = new MediaControllerCompat.Callback() {
+        @Override
+        public void onMetadataChanged(MediaMetadataCompat metadata) {
+            runOnUiThread(() -> updateMiniBarFromController(metadata, MediaControllerCompat.getMediaController(PlaylistsActivity.this).getPlaybackState()));
+        }
+
+        @Override
+        public void onPlaybackStateChanged(PlaybackStateCompat state) {
+            runOnUiThread(() -> updateMiniBarFromController(MediaControllerCompat.getMediaController(PlaylistsActivity.this).getMetadata(), state));
+        }
+    };
+
+    private void updateMiniBarFromController(MediaMetadataCompat meta, PlaybackStateCompat state) {
+        View include = findViewById(com.example.tempo.R.id.nowPlayingInclude);
+        TextView title = findViewById(com.example.tempo.R.id.nowPlayingTitle);
+        ImageButton playBtn = findViewById(com.example.tempo.R.id.nowPlayPause);
+        if (meta == null || state == null || include == null || title == null || playBtn == null) {
+            if (include != null) include.setVisibility(View.GONE);
+            return;
+        }
+
+        String t = meta.getString(MediaMetadataCompat.METADATA_KEY_TITLE);
+        boolean playing = state.getState() == PlaybackStateCompat.STATE_PLAYING;
+
+        title.setText(t != null ? t : "");
+        playBtn.setImageResource(playing ? com.example.tempo.R.drawable.ic_pause_icon : com.example.tempo.R.drawable.ic_play_icon);
+
+        if (include.getVisibility() != View.VISIBLE) {
+            include.setVisibility(View.VISIBLE);
+            include.setTranslationY(include.getHeight());
+            include.setAlpha(0f);
+            include.animate().translationY(0).alpha(1f).setDuration(250).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        try {
+            MediaControllerCompat controller = MediaControllerCompat.getMediaController(PlaylistsActivity.this);
+            if (controller != null) controller.unregisterCallback(controllerCallback);
+        } catch (Exception ignored) {}
+        try { if (mediaBrowser != null && mediaBrowser.isConnected()) { mediaBrowser.disconnect(); mediaBrowser = null; } } catch (Exception ignored) {}
     }
 
     @Override

@@ -3,6 +3,7 @@ package com.example.tempo.ui;
 import android.Manifest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -14,7 +15,13 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.AccelerateDecelerateInterpolator;
+import android.support.v4.media.MediaBrowserCompat;
+import android.support.v4.media.session.MediaControllerCompat;
+import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
 import android.widget.BaseAdapter;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -65,6 +72,8 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
 
     private static final int REQUEST_CODE_POST_NOTIFICATIONS = 9001;
 
+    MediaBrowserCompat mediaBrowser; // for mini-bar live updates
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -100,15 +109,10 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
         // Now-playing mini bar
         TextView nowPlayingTitle = findViewById(com.example.tempo.R.id.nowPlayingTitle);
         View nowPlayingClickable = findViewById(com.example.tempo.R.id.nowPlayingClickable);
-        // initial visibility
-        if (com.example.tempo.Services.MediaPlaybackService.isActive) {
-            nowPlayingTitle.setText(com.example.tempo.Services.MediaPlaybackService.currentTitle);
-            nowPlayingTitle.setVisibility(View.VISIBLE);
-            nowPlayingClickable.setVisibility(View.VISIBLE);
-        } else {
-            nowPlayingTitle.setVisibility(View.GONE);
-            nowPlayingClickable.setVisibility(View.GONE);
-        }
+        // initial visibility — toggle the whole include so it's fully hidden/shown
+        View nowPlayingInclude = findViewById(com.example.tempo.R.id.nowPlayingInclude);
+        // leave include hidden by default
+        if (nowPlayingInclude != null) nowPlayingInclude.setVisibility(View.GONE);
 
         nowPlayingClickable.setOnClickListener(v -> {
             if (com.example.tempo.Services.MediaPlaybackService.isActive) {
@@ -118,6 +122,42 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
                 overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
             }
         });
+
+        // now-playing controls (safe: nowPlayingInclude may be null if not inflated)
+        ImageButton nowPrev = findViewById(com.example.tempo.R.id.nowPrev);
+        ImageButton nowPlayPause = findViewById(com.example.tempo.R.id.nowPlayPause);
+        ImageButton nowNext = findViewById(com.example.tempo.R.id.nowNext);
+
+        // initialize icons based on service state
+        if (com.example.tempo.Services.MediaPlaybackService.isPlaying) {
+            nowPlayPause.setImageResource(com.example.tempo.R.drawable.ic_pause_icon);
+        } else {
+            nowPlayPause.setImageResource(com.example.tempo.R.drawable.ic_play_icon);
+        }
+
+        nowPrev.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PREV)));
+        nowNext.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_NEXT)));
+        nowPlayPause.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE)));
+
+        // Setup MediaBrowser to receive live updates for now-playing mini bar
+        mediaBrowser = new MediaBrowserCompat(this, new ComponentName(this, com.example.tempo.Services.MediaPlaybackService.class),
+                new MediaBrowserCompat.ConnectionCallback() {
+                    @Override
+                    public void onConnected() {
+                        try {
+                            MediaControllerCompat controller = new MediaControllerCompat(MainActivity.this, mediaBrowser.getSessionToken());
+                            MediaControllerCompat.setMediaController(MainActivity.this, controller);
+                            // initialize bar from current metadata/state
+                            MediaMetadataCompat meta = controller.getMetadata();
+                            PlaybackStateCompat state = controller.getPlaybackState();
+                            runOnUiThread(() -> updateMiniBarFromController(meta, state));
+                            controller.registerCallback(controllerCallback);
+                        } catch (Exception e) {
+                            // ignore
+                        }
+                    }
+                }, null);
+        mediaBrowser.connect();
 
         bottomNavigationView.setSelectedItemId(com.example.tempo.R.id.songLibraryButton);
 
@@ -476,6 +516,16 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (notificationManager != null) notificationManager.cancelAll();
         }
+        try {
+            MediaControllerCompat controller = MediaControllerCompat.getMediaController(MainActivity.this);
+            if (controller != null) controller.unregisterCallback(controllerCallback);
+        } catch (Exception ignored) {}
+        try {
+            if (mediaBrowser != null && mediaBrowser.isConnected()) {
+                mediaBrowser.disconnect();
+                mediaBrowser = null;
+            }
+        } catch (Exception ignored) {}
     }
 
 
@@ -504,6 +554,45 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
         } else {
             nowPlayingTitle.setVisibility(View.GONE);
             nowPlayingClickable.setVisibility(View.GONE);
+        }
+    }
+
+    private final MediaControllerCompat.Callback controllerCallback = new MediaControllerCompat.Callback() {
+        @Override
+        public void onMetadataChanged(MediaMetadataCompat metadata) {
+            runOnUiThread(() -> updateMiniBarFromController(metadata, MediaControllerCompat.getMediaController(MainActivity.this).getPlaybackState()));
+        }
+
+        @Override
+        public void onPlaybackStateChanged(PlaybackStateCompat state) {
+            runOnUiThread(() -> updateMiniBarFromController(MediaControllerCompat.getMediaController(MainActivity.this).getMetadata(), state));
+        }
+    };
+
+    private void updateMiniBarFromController(MediaMetadataCompat meta, PlaybackStateCompat state) {
+        View include = findViewById(com.example.tempo.R.id.nowPlayingInclude);
+        TextView title = findViewById(com.example.tempo.R.id.nowPlayingTitle);
+        ImageButton playBtn = findViewById(com.example.tempo.R.id.nowPlayPause);
+        if (meta == null || state == null || include == null || title == null || playBtn == null) {
+            if (include != null) include.setVisibility(View.GONE);
+            return;
+        }
+
+        String t = meta.getString(MediaMetadataCompat.METADATA_KEY_TITLE);
+        boolean playing = state.getState() == PlaybackStateCompat.STATE_PLAYING;
+
+        title.setText(t != null ? t : "");
+
+        // update icon
+        playBtn.setImageResource(playing ? com.example.tempo.R.drawable.ic_pause_icon : com.example.tempo.R.drawable.ic_play_icon);
+
+        // show/hide with animation
+        if (include.getVisibility() != View.VISIBLE) {
+            include.setVisibility(View.VISIBLE);
+            // slide up + fade in
+            include.setTranslationY(include.getHeight());
+            include.setAlpha(0f);
+            include.animate().translationY(0).alpha(1f).setDuration(250).setInterpolator(new AccelerateDecelerateInterpolator()).start();
         }
     }
 }
