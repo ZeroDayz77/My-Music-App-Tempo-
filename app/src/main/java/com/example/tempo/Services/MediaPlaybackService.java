@@ -7,7 +7,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.media.AudioAttributes;
-import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -58,6 +57,11 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
     private ArrayList<File> queue = new ArrayList<>();
     private int queueIndex = 0;
     private final int NOTIF_ID = 1;
+
+    // Indicates whether the playback service currently has an active queue/player.
+    // This is a simple process-global flag other Activities can check to know whether
+    public static volatile boolean isActive = false;
+    public static volatile String currentTitle = "";
 
     private final BroadcastReceiver noisyReceiver = new BroadcastReceiver() {
         @Override
@@ -223,7 +227,7 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
             mediaPlayer.start();
 
             // request audio focus
-            int result = audioManager.requestAudioFocus(focusRequest);
+            int result = audioManager.requestAudioFocus(afChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
             if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
                 Log.w(TAG, "Audio focus not granted");
                 // proceed anyway, but audio may be muted by the system
@@ -241,6 +245,8 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
 
             updatePlaybackState(PlaybackStateCompat.STATE_PLAYING);
             startForegroundNotification();
+            isActive = true; // Set the active flag
+            currentTitle = title; // Set the current title
 
         } catch (Exception e) {
             Log.e(TAG, "playCurrent error", e);
@@ -363,7 +369,9 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
             mediaSession = null;
         }
         try { unregisterReceiver(noisyReceiver); } catch (Exception ignored) {}
-        try { audioManager.abandonAudioFocusRequest(focusRequest); } catch (Exception ignored) {}
+        try { audioManager.abandonAudioFocus(afChangeListener); } catch (Exception ignored) {}
+        isActive = false; // Clear the active flag
+        currentTitle = ""; // Clear the current title
         stopSelf();
     }
 
@@ -396,10 +404,6 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
         }
     };
 
-    private final AudioFocusRequest focusRequest =
-            new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                    .setOnAudioFocusChangeListener(afChangeListener)
-                    .build();
 
     @Override
     public BrowserRoot onGetRoot(@NonNull String clientPackageName, int clientUid, Bundle rootHints) {

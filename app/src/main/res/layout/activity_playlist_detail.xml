@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/music_player_background"
-    tools:context=".PlaylistDetailActivity">
+    tools:context=".ui.PlaylistDetailActivity">
 
     <include layout="@layout/appbar" />
 

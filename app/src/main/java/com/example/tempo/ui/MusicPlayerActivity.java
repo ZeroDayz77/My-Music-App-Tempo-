@@ -106,6 +106,10 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
             if (manager != null) manager.createNotificationChannel(channel);
         }
 
+        // Hide shared mini now-playing bar when we're on the full player screen
+        View nowPlayingInclude = findViewById(com.example.tempo.R.id.nowPlayingInclude);
+        if (nowPlayingInclude != null) nowPlayingInclude.setVisibility(View.GONE);
+
         // Safely load songs passed via Intent extras (supports Serializable fallback)
         Intent i = getIntent();
         bundle = i.getExtras();

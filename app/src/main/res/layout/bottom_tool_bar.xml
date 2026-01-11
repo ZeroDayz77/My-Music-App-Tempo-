@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     xmlns:tools="http://schemas.android.com/tools"
-    tools:context=".BottomToolbarActivity">
+    tools:context=".ui.BottomToolbarActivity">
 
     <FrameLayout
         android:id="@+id/frameLayout"
@@ -31,8 +31,15 @@
         android:background="@color/black"
         android:id="@+id/bottomToolBar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="56dp"
         style="@style/Widget.MaterialComponents.BottomNavigationView.Colored"
         android:layout_alignParentBottom="true"
         app:menu="@menu/bottomtoolbarmenu"/>
+
+    <include
+        android:id="@+id/nowPlayingInclude"
+        layout="@layout/now_playing_bar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_above="@id/bottomToolBar" />
 </RelativeLayout>

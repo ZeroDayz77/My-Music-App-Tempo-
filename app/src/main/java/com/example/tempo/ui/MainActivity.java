@@ -97,6 +97,28 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
 
         BottomNavigationView bottomNavigationView = findViewById(com.example.tempo.R.id.bottomToolBar);
 
+        // Now-playing mini bar
+        TextView nowPlayingTitle = findViewById(com.example.tempo.R.id.nowPlayingTitle);
+        View nowPlayingClickable = findViewById(com.example.tempo.R.id.nowPlayingClickable);
+        // initial visibility
+        if (com.example.tempo.Services.MediaPlaybackService.isActive) {
+            nowPlayingTitle.setText(com.example.tempo.Services.MediaPlaybackService.currentTitle);
+            nowPlayingTitle.setVisibility(View.VISIBLE);
+            nowPlayingClickable.setVisibility(View.VISIBLE);
+        } else {
+            nowPlayingTitle.setVisibility(View.GONE);
+            nowPlayingClickable.setVisibility(View.GONE);
+        }
+
+        nowPlayingClickable.setOnClickListener(v -> {
+            if (com.example.tempo.Services.MediaPlaybackService.isActive) {
+                Intent musicPlayerActivity = new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class);
+                musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                startActivity(musicPlayerActivity);
+                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+            }
+        });
+
         bottomNavigationView.setSelectedItemId(com.example.tempo.R.id.songLibraryButton);
 
         bottomNavigationView.setOnItemSelectedListener(item -> {
@@ -104,7 +126,8 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
             if (id == com.example.tempo.R.id.songLibraryButton) {
                 return true;
             } else if (id == com.example.tempo.R.id.songPlayingButton) {
-                if (mediaPlayer == null) {
+                // Show player if the playback service is active (playlist loaded/playing or paused)
+                if (!com.example.tempo.Services.MediaPlaybackService.isActive) {
                     Toast.makeText(getApplicationContext(), "No song currently playing, please choose a song...", Toast.LENGTH_SHORT).show();
                     return false;
                 }
@@ -466,5 +489,21 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
     public void onBackPressed() {
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         super.onBackPressed();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // update now-playing bar
+        TextView nowPlayingTitle = findViewById(com.example.tempo.R.id.nowPlayingTitle);
+        View nowPlayingClickable = findViewById(com.example.tempo.R.id.nowPlayingClickable);
+        if (com.example.tempo.Services.MediaPlaybackService.isActive) {
+            nowPlayingTitle.setText(com.example.tempo.Services.MediaPlaybackService.currentTitle);
+            nowPlayingTitle.setVisibility(View.VISIBLE);
+            nowPlayingClickable.setVisibility(View.VISIBLE);
+        } else {
+            nowPlayingTitle.setVisibility(View.GONE);
+            nowPlayingClickable.setVisibility(View.GONE);
+        }
     }
 }

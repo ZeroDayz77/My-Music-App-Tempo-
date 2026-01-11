@@ -9,6 +9,7 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -107,19 +108,11 @@ public class PlaylistsActivity extends AppCompatActivity {
                         overridePendingTransition(0,0);
                         return true;
                     case com.example.tempo.R.id.songPlayingButton:
-
-                        if(com.example.tempo.ui.MainActivity.mediaPlayer == null)
-                        {
-                            Context context = getApplicationContext();
-                            CharSequence text = "No song currently playing, please choose a song...";
-                            int duration = Toast.LENGTH_SHORT;
-
-                            Toast toast = Toast.makeText(context, text, duration);
-                            toast.show();
+                        if (!com.example.tempo.Services.MediaPlaybackService.isActive) {
+                            Toast.makeText(getApplicationContext(), "No song currently playing, please choose a song...", Toast.LENGTH_SHORT).show();
                             return false;
                         }
-
-                        Intent musicPlayerActivity = (new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class));
+                        Intent musicPlayerActivity = new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class);
                         musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
                         startActivity(musicPlayerActivity);
                         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
@@ -132,6 +125,26 @@ public class PlaylistsActivity extends AppCompatActivity {
             }
         });
 
+        // now-playing mini bar (shared via bottom toolbar include)
+        TextView nowPlayingTitle = findViewById(com.example.tempo.R.id.nowPlayingTitle);
+        View nowPlayingClickable = findViewById(com.example.tempo.R.id.nowPlayingClickable);
+        if (com.example.tempo.Services.MediaPlaybackService.isActive) {
+            nowPlayingTitle.setText(com.example.tempo.Services.MediaPlaybackService.currentTitle);
+            nowPlayingTitle.setVisibility(View.VISIBLE);
+            nowPlayingClickable.setVisibility(View.VISIBLE);
+        } else {
+            nowPlayingTitle.setVisibility(View.GONE);
+            nowPlayingClickable.setVisibility(View.GONE);
+        }
+
+        nowPlayingClickable.setOnClickListener(v -> {
+            if (com.example.tempo.Services.MediaPlaybackService.isActive) {
+                Intent musicPlayerActivity = new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class);
+                musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                startActivity(musicPlayerActivity);
+                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+            }
+        });
     }
 
     private void loadPlaylists() {
