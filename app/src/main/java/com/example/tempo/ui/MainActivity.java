@@ -3,10 +3,9 @@ package com.example.tempo.ui;
 import android.Manifest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Bundle;
@@ -15,7 +14,6 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.ListView;
@@ -26,10 +24,13 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.example.tempo.Services.OnClearRecentService;
+import com.example.tempo.Services.MediaPlaybackService;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
-import com.google.android.material.navigation.NavigationBarView;
+
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.PermissionToken;
 import com.karumi.dexter.listener.PermissionDeniedResponse;
@@ -62,6 +63,8 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
 
     private PlaylistRepository playlistRepository;
 
+    private static final int REQUEST_CODE_POST_NOTIFICATIONS = 9001;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -73,13 +76,7 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             createChannel();
-            IntentFilter filter = new IntentFilter("SONG_CURRENTSONG");
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-
-                registerReceiver(broadcastReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
-            } else {
-                registerReceiver(broadcastReceiver, filter);
-            }
+            // clear-recent service (keeps app from restarting unexpectedly)
             startService(new Intent(getBaseContext(), OnClearRecentService.class));
         }
 
@@ -128,7 +125,7 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
 
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(com.example.tempo.ui.CreateMusicNotification.CHANNEL_ID, "Playback", NotificationManager.IMPORTANCE_HIGH);
+            NotificationChannel channel = new NotificationChannel(MediaPlaybackService.CHANNEL_ID, "Playback", NotificationManager.IMPORTANCE_HIGH);
             notificationManager = getSystemService(NotificationManager.class);
 
             if (notificationManager != null) {
@@ -201,6 +198,12 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
                     @Override
                     public void onPermissionGranted(PermissionGrantedResponse permissionGrantedResponse) {
                         displaySongs();
+                        // Request notification permission on Android 13+
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_CODE_POST_NOTIFICATIONS);
+                            }
+                        }
                     }
 
                     @Override
@@ -213,6 +216,18 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
                         permissionToken.continuePermissionRequest();
                     }
                 }).check();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CODE_POST_NOTIFICATIONS) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.d("MainActivity", "POST_NOTIFICATIONS permission granted");
+            } else {
+                Log.d("MainActivity", "POST_NOTIFICATIONS permission denied");
+            }
+        }
     }
 
     private ArrayList<File> filter(String newText) {
@@ -286,18 +301,24 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
                 mediaPlayer = null;
             }
 
-            // Use the actual file name (no path) to avoid passing a full file path to the player activity
+            // Start playback via the MediaPlaybackService (service owns MediaPlayer & notification)
+            ArrayList<File> playList = mySongs;
+            Intent serviceIntent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class)
+                    .setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PLAY)
+                    .putExtra(com.example.tempo.Services.MediaPlaybackService.EXTRA_PLAYLIST, playList)
+                    .putExtra(com.example.tempo.Services.MediaPlaybackService.EXTRA_POSITION, position);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+
+            // Open player UI (activity will connect to the service)
             String songName = mySongs.get(position).getName().replace(".mp3", "").replace(".wav", "");
             startActivity(new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class)
-                    .putExtra("songs", mySongs)
                     .putExtra("songname", songName)
                     .putExtra("pos", position));
             overridePendingTransition(0, 0);
-
-            // Immediately show a notification with the selected song title (no playback metadata yet)
-            com.example.tempo.ui.CreateMusicNotification.createNotification(MainActivity.this,
-                    mySongs.get(position).getName().replace(".mp3", "").replace(".wav", ""), "",
-                    com.example.tempo.R.drawable.ic_play_icon, position, mySongs.size(), 0L, 0L, false);
         });
 
         listView.setOnItemLongClickListener((parent, view, position, id) -> {
@@ -350,21 +371,12 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
                 .show();
     }
 
-    BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (intent == null || intent.getExtras() == null) return;
-            String action = intent.getExtras().getString("actionname");
-            // Placeholder: react to broadcast actions if needed
-        }
-    };
-
     public class customAdapter extends BaseAdapter {
         public ArrayList<File> adapterList;
         private final Context ctx;
 
         public customAdapter(ArrayList<File> list) {
-            this.adapterList = list != null ? list : new ArrayList<File>();
+            this.adapterList = list != null ? list : new ArrayList<>();
             this.ctx = MainActivity.this;
         }
 
@@ -413,28 +425,26 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
 
     @Override
     public void onButtonPrevious() {
-        com.example.tempo.ui.MusicPlayerActivity.position--;
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(com.example.tempo.ui.MusicPlayerActivity.position).getName().replace(".mp3", "").replace(".wav", ""),
-                com.example.tempo.R.drawable.ic_pause_icon, com.example.tempo.ui.MusicPlayerActivity.position, mySongs.size() - 1);
+        Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PREV);
+        startService(intent);
     }
 
     @Override
     public void onButtonPlay() {
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(com.example.tempo.ui.MusicPlayerActivity.position).getName().replace(".mp3", "").replace(".wav", ""),
-                com.example.tempo.R.drawable.ic_pause_icon, com.example.tempo.ui.MusicPlayerActivity.position, mySongs.size() - 1);
+        Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE);
+        startService(intent);
     }
 
     @Override
     public void onButtonPause() {
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(com.example.tempo.ui.MusicPlayerActivity.position).getName().replace(".mp3", "").replace(".wav", ""),
-                com.example.tempo.R.drawable.ic_play_icon, com.example.tempo.ui.MusicPlayerActivity.position, mySongs.size() - 1);
+        Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PAUSE);
+        startService(intent);
     }
 
     @Override
     public void onButtonNext() {
-        com.example.tempo.ui.MusicPlayerActivity.position++;
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(com.example.tempo.ui.MusicPlayerActivity.position).getName().replace(".mp3", "").replace(".wav", ""),
-                com.example.tempo.R.drawable.ic_pause_icon, com.example.tempo.ui.MusicPlayerActivity.position, mySongs.size() - 1);
+        Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_NEXT);
+        startService(intent);
     }
 
     @Override
@@ -442,11 +452,6 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
         super.onDestroy();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (notificationManager != null) notificationManager.cancelAll();
-        }
-
-        try {
-            unregisterReceiver(broadcastReceiver);
-        } catch (IllegalArgumentException ignored) {
         }
     }
 

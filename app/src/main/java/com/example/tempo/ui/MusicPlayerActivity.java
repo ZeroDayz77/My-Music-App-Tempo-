@@ -10,18 +10,14 @@ import android.animation.ObjectAnimator;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.content.BroadcastReceiver;
-import android.content.Context;
+import android.content.ComponentName;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.graphics.PorterDuff;
 import android.media.MediaPlayer;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.annotation.SuppressLint;
 import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
@@ -30,13 +26,17 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.example.tempo.Services.MediaPlaybackService;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Objects;
-import java.util.Random;
 
-import com.example.tempo.Services.NotificationActionService;
+import android.support.v4.media.MediaBrowserCompat;
+import android.support.v4.media.session.MediaControllerCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
+import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.MediaBrowserCompat.ConnectionCallback;
 
 public class MusicPlayerActivity extends AppCompatActivity implements com.example.tempo.ui.Playable {
     AppCompatButton buttonPlay, skipSongNext, skipSongPrev, buttonShuffle, buttonRepeat;
@@ -44,7 +44,10 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
     SeekBar seekbar;
     ImageView songImageView;
     String songName;
-    MediaPlayer mediaPlayer;
+    // Activity no longer owns MediaPlayer; controller will talk to the service
+    MediaPlayer mediaPlayer; // kept for backward compatibility in some code paths but not created here
+    MediaBrowserCompat mediaBrowser;
+    MediaControllerCompat mediaController;
     public static int position;
     public static boolean isShuffleToggled;
     public static ArrayList<File> mySongs;
@@ -52,81 +55,6 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
     Handler seekHandler;
     Runnable seekRunnable;
     public static Bundle bundle;
-
-    // BroadcastReceiver will be registered in onCreate
-    BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (intent == null) return;
-
-            // Always refresh local reference to the shared player (NotificationActionService may have changed it)
-            mediaPlayer = com.example.tempo.ui.MainActivity.mediaPlayer;
-
-            // Handle unified actions from NotificationActionService
-            if (NotificationActionService.ACTION_UNIFIED.equals(intent.getAction())) {
-                String cmd = intent.getStringExtra(NotificationActionService.EXTRA_COMMAND);
-                if (cmd == null) return;
-
-                switch (cmd) {
-                    case "previous":
-                        onButtonPrevious();
-                        break;
-                    case "play_pause":
-                        if (mediaPlayer != null) {
-                            if (mediaPlayer.isPlaying()) {
-                                mediaPlayer.pause();
-                                buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_play_icon);
-                                onButtonPause();
-                            } else {
-                                mediaPlayer.start();
-                                buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_pause_icon);
-                                onButtonPlay();
-                            }
-                            // Update notification with current state
-                            com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this,
-                                    songName, "", mediaPlayer.isPlaying() ? com.example.tempo.R.drawable.ic_pause_icon : com.example.tempo.R.drawable.ic_play_icon,
-                                    position, mySongs.size(), mediaPlayer.getDuration(), mediaPlayer.getCurrentPosition(), mediaPlayer.isPlaying());
-                        }
-                        break;
-                    case "next":
-                        onButtonNext();
-                        break;
-                    case "seek_to":
-                        long seekPos = intent.getLongExtra(NotificationActionService.EXTRA_SEEK_POSITION, -1);
-                        if (seekPos >= 0 && mediaPlayer != null) {
-                            mediaPlayer.seekTo((int) seekPos);
-                            // update notification progress
-                            com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this,
-                                    songName, "", mediaPlayer.isPlaying() ? com.example.tempo.R.drawable.ic_pause_icon : com.example.tempo.R.drawable.ic_play_icon,
-                                    position, mySongs.size(), mediaPlayer.getDuration(), mediaPlayer.getCurrentPosition(), mediaPlayer.isPlaying());
-                        }
-                        break;
-                }
-                return;
-            }
-
-            // Legacy behavior fallback (if some other component uses it)
-            Bundle extras = intent.getExtras();
-            if (extras == null) return;
-            String action = extras.getString("actionname");
-            if (action == null) return;
-
-            switch (Objects.requireNonNull(action)) {
-                case com.example.tempo.ui.CreateMusicNotification.SKIPSONGPREV:
-                    onButtonPrevious();
-                    break;
-                case com.example.tempo.ui.CreateMusicNotification.BUTTONPLAY:
-                    if (mediaPlayer != null && mediaPlayer.isPlaying())
-                        onButtonPause();
-                    else
-                        onButtonPlay();
-                    break;
-                case com.example.tempo.ui.CreateMusicNotification.SKIPSONGNEXT:
-                    onButtonNext();
-                    break;
-            }
-        }
-    };
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
@@ -171,7 +99,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
 
         // Create notification channel on O+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(com.example.tempo.ui.CreateMusicNotification.CHANNEL_ID, "Playback", NotificationManager.IMPORTANCE_HIGH);
+            NotificationChannel channel = new NotificationChannel(MediaPlaybackService.CHANNEL_ID, "Playback", NotificationManager.IMPORTANCE_HIGH);
             NotificationManager manager = getSystemService(NotificationManager.class);
             channel.enableVibration(false);
             channel.setSound(null, null);
@@ -232,7 +160,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
             try {
                 java.io.File possibleFile = new java.io.File(passedSongName);
                 String nameOnly = possibleFile.getName();
-                if (nameOnly != null && !nameOnly.isEmpty()) displayName = nameOnly;
+                if (!nameOnly.isEmpty()) displayName = nameOnly;
             } catch (Exception ignored) {
             }
 
@@ -241,128 +169,64 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
             songNameText.setText(songName);
         }
 
+        // We don't create a MediaPlayer here. The MediaPlaybackService owns playback.
         if (mySongs.isEmpty()) {
             if (songName == null) songName = "";
         } else {
-            Uri uri = Uri.parse(mySongs.get(position).toString());
-            // Only overwrite songName if we didn't already set it from the Intent string
             if (songName == null || songName.isEmpty()) {
                 songName = mySongs.get(position).getName().replace(".mp3", "").replace(".wav", "");
                 songNameText.setText(songName);
             }
-
-            // Initialize and start playback
-            mediaPlayer = MediaPlayer.create(getApplicationContext(), uri);
-            if (mediaPlayer != null) {
-                mediaPlayer.start();
-                // keep shared reference for background control
-                com.example.tempo.ui.MainActivity.mediaPlayer = mediaPlayer;
-
-                // Create initial notification with metadata
-                com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this,
-                        songName, "", com.example.tempo.R.drawable.ic_pause_icon, position, mySongs.size(), mediaPlayer.getDuration(), mediaPlayer.getCurrentPosition(), true);
-
-                // start seekbar updater
-                startSeekbarUpdateThread();
-
-                String endTime = createSongTime(mediaPlayer.getDuration());
-                songEndTime.setText(endTime);
-            }
+            // The service will manage playback and the notification. We will connect to it in onStart().
         }
 
         // Keep UI time labels updated
-        final Handler timeHandler = new Handler();
+        final Handler timeHandler = new Handler(Looper.getMainLooper());
         final int timeDelay = 500;
         timeHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 try {
-                    MediaPlayer mp = com.example.tempo.ui.MainActivity.mediaPlayer;
-                    if (mp != null) {
-                        String currentTime = createSongTime(mp.getCurrentPosition());
-                        songStartTime.setText(currentTime);
-
-                        String endTime = createSongTime(mp.getDuration());
-                        songEndTime.setText(endTime);
+                    if (mediaController != null) {
+                        PlaybackStateCompat state = mediaController.getPlaybackState();
+                        MediaMetadataCompat meta = mediaController.getMetadata();
+                        if (state != null) {
+                            long cur = state.getPosition();
+                            songStartTime.setText(createSongTime((int) cur));
+                        }
+                        if (meta != null) {
+                            long dur = meta.getLong(MediaMetadataCompat.METADATA_KEY_DURATION);
+                            songEndTime.setText(createSongTime((int) dur));
+                        }
                     }
                 } catch (RuntimeException e) {
-                    Log.w("MusicPlayerActivity", "time handler safe-guard: media player unusable", e);
+                    Log.w("MusicPlayerActivity", "time handler safe-guard: controller unusable", e);
                 }
                 timeHandler.postDelayed(this, timeDelay);
             }
         }, timeDelay);
 
-        // Register receiver for notification actions (use RECEIVER_NOT_EXPORTED on Android 13+)
-        int registerFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ? Context.RECEIVER_NOT_EXPORTED : 0;
-        IntentFilter _filter = new IntentFilter(NotificationActionService.ACTION_UNIFIED);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // registerReceiver with flags is available on API 26+
-            registerReceiver(broadcastReceiver, _filter, registerFlags);
-        } else {
-            registerReceiver(broadcastReceiver, _filter);
-        }
-
         // Play/pause, skip, shuffle, repeat handlers
         buttonPlay.setOnClickListener(view -> {
-            if (mediaPlayer != null) {
-                if (mediaPlayer.isPlaying()) {
-                    buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_play_icon);
-                    mediaPlayer.pause();
-                    onButtonPause();
-                    com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName, "", com.example.tempo.R.drawable.ic_play_icon, position, mySongs.size(), mediaPlayer.getDuration(), mediaPlayer.getCurrentPosition(), false);
+            MediaControllerCompat controller = MediaControllerCompat.getMediaController(MusicPlayerActivity.this);
+            if (controller != null) {
+                PlaybackStateCompat state = controller.getPlaybackState();
+                if (state != null && state.getState() == PlaybackStateCompat.STATE_PLAYING) {
+                    controller.getTransportControls().pause();
                 } else {
-                    buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_pause_icon);
-                    mediaPlayer.start();
-                    onButtonPlay();
-                    com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName, "", com.example.tempo.R.drawable.ic_pause_icon, position, mySongs.size(), mediaPlayer.getDuration(), mediaPlayer.getCurrentPosition(), true);
+                    controller.getTransportControls().play();
                 }
             }
         });
 
         skipSongNext.setOnClickListener(view -> {
-            if (mediaPlayer != null && !mySongs.isEmpty()) {
-                mediaPlayer.stop();
-                mediaPlayer.release();
-                com.example.tempo.ui.MainActivity.mediaPlayer = null;
-                stopSeekbarUpdate();
-                position = (position + 1) % mySongs.size();
-                Uri u = Uri.parse(mySongs.get(position).toString());
-                mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                com.example.tempo.ui.MainActivity.mediaPlayer = mediaPlayer;
-                songName = mySongs.get(position).getName().replace(".mp3", "").replace(".wav", "");
-                songNameText.setText(songName);
-                if (mediaPlayer != null) {
-                    mediaPlayer.start();
-                    buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_pause_icon);
-                    startAnimation(songImageView);
-                    startSeekbarUpdateThread();
-                    onButtonNext();
-                    com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName, "", com.example.tempo.R.drawable.ic_pause_icon, position, mySongs.size(), mediaPlayer.getDuration(), mediaPlayer.getCurrentPosition(), true);
-                }
-            }
+            MediaControllerCompat controller = MediaControllerCompat.getMediaController(MusicPlayerActivity.this);
+            if (controller != null) controller.getTransportControls().skipToNext();
         });
 
         skipSongPrev.setOnClickListener(view -> {
-            if (mediaPlayer != null && !mySongs.isEmpty()) {
-                mediaPlayer.stop();
-                mediaPlayer.release();
-                com.example.tempo.ui.MainActivity.mediaPlayer = null;
-                stopSeekbarUpdate();
-                position = (position - 1) < 0 ? (mySongs.size() - 1) : (position - 1);
-                Uri u = Uri.parse(mySongs.get(position).toString());
-                mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                com.example.tempo.ui.MainActivity.mediaPlayer = mediaPlayer;
-                songName = mySongs.get(position).getName().replace(".mp3", "").replace(".wav", "");
-                songNameText.setText(songName);
-                if (mediaPlayer != null) {
-                    mediaPlayer.start();
-                    buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_pause_icon);
-                    startAnimation(songImageView);
-                    startSeekbarUpdateThread();
-                    onButtonPrevious();
-                    com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName, "", com.example.tempo.R.drawable.ic_pause_icon, position, mySongs.size(), mediaPlayer.getDuration(), mediaPlayer.getCurrentPosition(), true);
-                }
-            }
+            MediaControllerCompat controller = MediaControllerCompat.getMediaController(MusicPlayerActivity.this);
+            if (controller != null) controller.getTransportControls().skipToPrevious();
         });
 
         buttonShuffle.setOnClickListener(view -> {
@@ -387,28 +251,6 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
             }
         });
 
-        mediaPlayer.setOnCompletionListener(mp -> {
-            if (isShuffleToggled) {
-                mp.stop();
-                mp.release();
-                Random random = new Random();
-                int upperbound = mySongs.size();
-                position = (position + random.nextInt(upperbound));
-                Uri u = Uri.parse(mySongs.get(position).toString());
-                mediaPlayer = MediaPlayer.create(getApplicationContext(), u);
-                songName = mySongs.get(position).getName().replace(".mp3", "").replace(".wav", "");
-                songNameText.setText(songName);
-                if (mediaPlayer != null) {
-                    mediaPlayer.start();
-                    buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_pause_icon);
-                    startAnimation(songImageView);
-                    startSeekbarUpdateThread();
-                }
-            } else {
-                skipSongNext.performClick();
-            }
-        });
-
         BottomNavigationView bottomNavigationView = findViewById(com.example.tempo.R.id.bottomToolBar);
         bottomNavigationView.setSelectedItemId(com.example.tempo.R.id.songPlayingButton);
         bottomNavigationView.setOnItemSelectedListener(item -> {
@@ -429,9 +271,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
     }
 
     private void startSeekbarUpdateThread() {
-        // If no media player available, don't start the updater
-        if (com.example.tempo.ui.MainActivity.mediaPlayer == null) return;
-
+        // Use MediaController's playback state/metadata to update seekbar
         // Ensure any previous handler is cleared
         stopSeekbarUpdate();
 
@@ -440,70 +280,84 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
             @Override
             public void run() {
                 try {
-                    MediaPlayer mp = com.example.tempo.ui.MainActivity.mediaPlayer;
-                    if (mp != null) {
-                        int totalSongDuration = mp.getDuration();
-                        int currentSongPosition = mp.getCurrentPosition();
-                        seekbar.setMax(totalSongDuration);
-                        seekbar.setProgress(currentSongPosition);
-                        // update notification progress in lockscreen / notification shade
-                        com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this,
-                                songName, "", mp.isPlaying() ? com.example.tempo.R.drawable.ic_pause_icon : com.example.tempo.R.drawable.ic_play_icon,
-                                position, mySongs != null ? mySongs.size() : 0, mp.getDuration(), mp.getCurrentPosition(), mp.isPlaying());
+                    if (mediaController != null) {
+                        PlaybackStateCompat state = mediaController.getPlaybackState();
+                        MediaMetadataCompat meta = mediaController.getMetadata();
+                        if (meta != null) {
+                            int dur = (int) meta.getLong(MediaMetadataCompat.METADATA_KEY_DURATION);
+                            seekbar.setMax(dur);
+                            songEndTime.setText(createSongTime(dur));
+                            // enable seekbar only when we have a valid duration
+                            seekbar.setEnabled(dur > 0);
+                        }
+                        if (state != null) {
+                            int pos = (int) state.getPosition();
+                            seekbar.setProgress(pos);
+                        }
                     }
                 } catch (RuntimeException e) {
-                    Log.w("MusicPlayerActivity", "seekbar updater safe-guard: media player unusable", e);
+                    Log.w("MusicPlayerActivity", "seekbar updater safe-guard: controller unusable", e);
                 }
-                // Re-post after delay
                 if (seekHandler != null) seekHandler.postDelayed(this, 500);
             }
         };
 
-        // Set initial max safely
-        MediaPlayer initial = com.example.tempo.ui.MainActivity.mediaPlayer;
-        if (initial != null) {
-            seekbar.setMax(initial.getDuration());
-            // also refresh local ref
-            mediaPlayer = initial;
-        }
-
         // Start periodic updates
+        // Ensure the seekbar is interactive right away (even if metadata not available yet)
+        seekbar.setEnabled(true);
+        // Run one immediate update to initialize UI right away
         seekHandler.post(seekRunnable);
 
         seekbar.getProgressDrawable().setColorFilter(getResources().getColor(com.example.tempo.R.color.white), PorterDuff.Mode.MULTIPLY);
         seekbar.getThumb().setColorFilter(getResources().getColor(com.example.tempo.R.color.teal_700), PorterDuff.Mode.SRC_IN);
 
         seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+             @Override
+             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
 
-            }
+             }
 
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
+             @Override
+             public void onStartTrackingTouch(SeekBar seekBar) {
 
-            }
+             }
 
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-                MediaPlayer mp = com.example.tempo.ui.MainActivity.mediaPlayer;
-                if (mp != null) {
+             @Override
+             public void onStopTrackingTouch(SeekBar seekBar) {
+                int newPos = seekBar.getProgress();
+                // If we have a media controller, use it. Otherwise, forward to the service so the action still works.
+                if (mediaController != null) {
                     try {
-                        mp.seekTo(seekBar.getProgress());
+                        mediaController.getTransportControls().seekTo(newPos);
                     } catch (RuntimeException e) {
-                        Log.w("MusicPlayerActivity", "seek safe-guard: media player unusable", e);
+                        Log.w("MusicPlayerActivity", "seek safe-guard: controller unusable", e);
+                    }
+                } else {
+                    // Send a service intent to perform the seek. Service should already be running when activity was opened.
+                    try {
+                        Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class)
+                                .setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_SEEK)
+                                .putExtra(com.example.tempo.Services.MediaPlaybackService.EXTRA_SEEK_POSITION, (long) newPos);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), intent);
+                        } else {
+                            startService(intent);
+                        }
+                    } catch (Exception e) {
+                        Log.w("MusicPlayerActivity", "seek forwarding failed", e);
                     }
                 }
-            }
-        });
-    }
+                // update UI immediately so it doesn't snap back
+                seekbar.setProgress(newPos);
+             }
+         });
+     }
 
     private void stopSeekbarUpdate() {
         if (seekHandler != null) {
             seekHandler.removeCallbacks(seekRunnable);
             seekHandler = null;
             seekRunnable = null;
-            seekbar.setProgress(0);
         }
     }
 
@@ -549,29 +403,21 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
     @Override
     public void onButtonPrevious() {
         position--;
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,
-                com.example.tempo.R.drawable.ic_pause_icon, position, mySongs.size() - 1);
         // Ensure shared position/state is in sync
         // MainActivity.mediaPlayer is kept in sync when we create/release the player
     }
 
     @Override
     public void onButtonPlay() {
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,
-                com.example.tempo.R.drawable.ic_pause_icon, position, mySongs.size() - 1);
     }
 
     @Override
     public void onButtonPause() {
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,
-                com.example.tempo.R.drawable.ic_play_icon, position, mySongs.size() - 1);
     }
 
     @Override
     public void onButtonNext() {
         position++;
-        com.example.tempo.ui.CreateMusicNotification.createNotification(MusicPlayerActivity.this, songName,
-                com.example.tempo.R.drawable.ic_pause_icon, position, mySongs.size() - 1);
     }
 
     @Override
@@ -590,21 +436,15 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Unregister the broadcast receiver when activity is destroyed
-        try {
-            unregisterReceiver(broadcastReceiver);
-        } catch (IllegalArgumentException ignored) {}
+        // No legacy broadcast receiver to unregister (service handles notification actions)
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        // restart seekbar update thread if needed
-        mediaPlayer = com.example.tempo.ui.MainActivity.mediaPlayer;
-        if (mediaPlayer != null) {
-            if (seekHandler == null) {
-                startSeekbarUpdateThread();
-            }
+        // restart seekbar update thread if needed (use MediaController)
+        if (mediaController != null) {
+            if (seekHandler == null) startSeekbarUpdateThread();
         }
     }
 
@@ -618,6 +458,88 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
     @Override
     protected void onStop() {
         super.onStop();
+        // Disconnect from the media browser service
+        if (mediaBrowser != null) {
+            mediaBrowser.disconnect();
+            mediaBrowser = null;
+        }
+        if (mediaController != null) {
+            mediaController.unregisterCallback(controllerCallback);
+            mediaController = null;
+        }
         stopSeekbarUpdate();
     }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        // Connect to the media browser service
+        mediaBrowser = new MediaBrowserCompat(this, new ComponentName(this, com.example.tempo.Services.MediaPlaybackService.class),
+                new ConnectionCallback() {
+                    @Override
+                    public void onConnected() {
+                        // We are connected to the media service
+                        mediaController = new MediaControllerCompat(MusicPlayerActivity.this, mediaBrowser.getSessionToken());
+                        MediaControllerCompat.setMediaController(MusicPlayerActivity.this, mediaController);
+
+                        // Update UI with current metadata
+                        MediaMetadataCompat metadata = mediaController.getMetadata();
+                        if (metadata != null) {
+                            songName = metadata.getString(MediaMetadataCompat.METADATA_KEY_TITLE);
+                            songNameText.setText(songName);
+                        }
+
+                        // Initialize seekbar immediately so it's usable even before playback state changes
+                        startSeekbarUpdateThread();
+
+                        // Start the playback if there is a song loaded
+                        if (mySongs != null && !mySongs.isEmpty()) {
+                            mediaController.getTransportControls().play();
+                        }
+
+                        // Register callback to receive updates
+                        mediaController.registerCallback(controllerCallback);
+                    }
+
+                    @Override
+                    public void onConnectionSuspended() {
+                        super.onConnectionSuspended();
+                        // Connection to the media service was suspended
+                        mediaController = null;
+                    }
+
+                    @Override
+                    public void onConnectionFailed() {
+                        super.onConnectionFailed();
+                        // Connection to the media service failed
+                        mediaController = null;
+                    }
+                }, null);
+        mediaBrowser.connect();
+    }
+
+    private final MediaControllerCompat.Callback controllerCallback = new MediaControllerCompat.Callback() {
+        @Override
+        public void onMetadataChanged(MediaMetadataCompat metadata) {
+            super.onMetadataChanged(metadata);
+            if (metadata != null) {
+                songName = metadata.getString(MediaMetadataCompat.METADATA_KEY_TITLE);
+                songNameText.setText(songName);
+            }
+        }
+
+        @Override
+        public void onPlaybackStateChanged(PlaybackStateCompat state) {
+            super.onPlaybackStateChanged(state);
+            if (state != null && state.getState() == PlaybackStateCompat.STATE_PLAYING) {
+                buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_pause_icon);
+                startAnimation(songImageView);
+                startSeekbarUpdateThread();
+            } else {
+                buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_play_icon);
+                // Keep seekbar showing current position while paused; do not stop updates here.
+            }
+        }
+    };
 }
+

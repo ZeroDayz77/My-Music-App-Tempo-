@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
 
     <application
@@ -50,7 +51,11 @@
             </intent-filter>
         </activity>
 
-        <receiver android:name="com.example.tempo.Services.NotificationActionService" android:exported="true" />
+        <service android:name="com.example.tempo.Services.MediaPlaybackService" android:exported="false" android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
 
         <service android:name="com.example.tempo.Services.OnClearRecentService" />
         <meta-data
