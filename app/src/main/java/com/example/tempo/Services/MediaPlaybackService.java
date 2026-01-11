@@ -46,7 +46,6 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
     public static final String EXTRA_POSITION = "extra_position";
     public static final String EXTRA_SEEK_POSITION = "extra_seek_position";
 
-    // Legacy notification action names (moved from CreateMusicNotification)
     public static final String SKIPSONGNEXT = "skip_song_next";
     public static final String SKIPSONGPREV = "skip_song_prev";
     public static final String BUTTONPLAY = "button_play";

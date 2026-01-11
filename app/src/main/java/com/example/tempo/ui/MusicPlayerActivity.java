@@ -44,14 +44,12 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
     SeekBar seekbar;
     ImageView songImageView;
     String songName;
-    // Activity no longer owns MediaPlayer; controller will talk to the service
-    MediaPlayer mediaPlayer; // kept for backward compatibility in some code paths but not created here
+    MediaPlayer mediaPlayer;
     MediaBrowserCompat mediaBrowser;
     MediaControllerCompat mediaController;
     public static int position;
     public static boolean isShuffleToggled;
     public static ArrayList<File> mySongs;
-    // seekbar updater uses a Handler + Runnable instead of a Thread
     Handler seekHandler;
     Runnable seekRunnable;
     public static Bundle bundle;
@@ -169,7 +167,6 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
             songNameText.setText(songName);
         }
 
-        // We don't create a MediaPlayer here. The MediaPlaybackService owns playback.
         if (mySongs.isEmpty()) {
             if (songName == null) songName = "";
         } else {
@@ -403,8 +400,6 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
     @Override
     public void onButtonPrevious() {
         position--;
-        // Ensure shared position/state is in sync
-        // MainActivity.mediaPlayer is kept in sync when we create/release the player
     }
 
     @Override
@@ -436,7 +431,6 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // No legacy broadcast receiver to unregister (service handles notification actions)
     }
 
     @Override
