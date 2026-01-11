@@ -57,7 +57,7 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
     ArrayList<File> filterList;
     boolean isSearchActive = false;
     ArrayList<File> mySongs;
-    static MediaPlayer mediaPlayer;
+    public static MediaPlayer mediaPlayer;
     NotificationManager notificationManager;
 
     private PlaylistRepository playlistRepository;
@@ -128,7 +128,7 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
 
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(com.example.tempo.ui.CreateMusicNotification.CHANNEL_ID, "notification", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel channel = new NotificationChannel(com.example.tempo.ui.CreateMusicNotification.CHANNEL_ID, "Playback", NotificationManager.IMPORTANCE_HIGH);
             notificationManager = getSystemService(NotificationManager.class);
 
             if (notificationManager != null) {
@@ -138,6 +138,7 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
             channel.enableVibration(false);
             channel.setSound(null, null);
             channel.setShowBadge(false);
+            channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
         }
     }
 
@@ -285,14 +286,18 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
                 mediaPlayer = null;
             }
 
-            String songName = (listView.getItemAtPosition(i).toString());
+            // Use the actual file name (no path) to avoid passing a full file path to the player activity
+            String songName = mySongs.get(position).getName().replace(".mp3", "").replace(".wav", "");
             startActivity(new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class)
                     .putExtra("songs", mySongs)
                     .putExtra("songname", songName)
                     .putExtra("pos", position));
             overridePendingTransition(0, 0);
 
-            com.example.tempo.ui.CreateMusicNotification.createNotification(MainActivity.this, mySongs.get(com.example.tempo.ui.MusicPlayerActivity.position).getName().replace(".mp3", "").replace(".wav", ""), com.example.tempo.R.drawable.ic_play_icon, com.example.tempo.ui.MusicPlayerActivity.position, mySongs.size());
+            // Immediately show a notification with the selected song title (no playback metadata yet)
+            com.example.tempo.ui.CreateMusicNotification.createNotification(MainActivity.this,
+                    mySongs.get(position).getName().replace(".mp3", "").replace(".wav", ""), "",
+                    com.example.tempo.R.drawable.ic_play_icon, position, mySongs.size(), 0L, 0L, false);
         });
 
         listView.setOnItemLongClickListener((parent, view, position, id) -> {
