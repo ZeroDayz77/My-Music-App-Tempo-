@@ -46,6 +46,7 @@ public class PlaylistsActivity extends AppCompatActivity {
     private PlaylistAdapter playlistAdapter;
 
     MediaBrowserCompat mediaBrowser;
+    private boolean skipShowAnimation = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,24 +83,57 @@ public class PlaylistsActivity extends AppCompatActivity {
             }
         });
 
-        listView.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
-            @Override
-            public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
-                final Playlist selected = playlists.get(position);
-                new AlertDialog.Builder(PlaylistsActivity.this)
-                        .setTitle("Delete playlist")
-                        .setMessage("Delete playlist '" + selected.getName() + "'? This will remove it and its items.")
-                        .setPositiveButton("Delete", new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which) {
-                                repository.deletePlaylist(selected.getId());
-                                loadPlaylists();
-                            }
-                        })
-                        .setNegativeButton("Cancel", null)
-                        .show();
-                return true;
-            }
+        listView.setOnItemLongClickListener((parent, view, position, id) -> {
+            final Playlist selected = playlists.get(position);
+            CharSequence[] options = new CharSequence[]{"Rename", "Delete", "Cancel"};
+            AlertDialog dlg = new AlertDialog.Builder(PlaylistsActivity.this)
+                    .setTitle(selected.getName())
+                    .setItems(options, (d, which) -> {
+                        if (which == 0) {
+                            // Rename
+                            final EditText input = new EditText(PlaylistsActivity.this);
+                            input.setText(selected.getName());
+                            AlertDialog renameDlg = new AlertDialog.Builder(PlaylistsActivity.this)
+                                    .setTitle("Rename playlist")
+                                    .setView(input)
+                                    .setPositiveButton("Rename", (rd, rw) -> {
+                                        String newName = input.getText().toString().trim();
+                                        if (!newName.isEmpty()) {
+                                            repository.renamePlaylist(selected.getId(), newName);
+                                            loadPlaylists();
+                                        }
+                                    })
+                                    .setNegativeButton("Cancel", null)
+                                    .show();
+                            // make buttons visible (white)
+                            try {
+                                renameDlg.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(getResources().getColor(android.R.color.white));
+                                renameDlg.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(getResources().getColor(android.R.color.white));
+                            } catch (Exception ignored) {}
+                        } else if (which == 1) {
+                            // Delete
+                            AlertDialog del = new AlertDialog.Builder(PlaylistsActivity.this)
+                                    .setTitle("Delete playlist")
+                                    .setMessage("Delete playlist '" + selected.getName() + "'? This will remove it and its items.")
+                                    .setPositiveButton("Delete", (dd, dw) -> {
+                                        repository.deletePlaylist(selected.getId());
+                                        loadPlaylists();
+                                    })
+                                    .setNegativeButton("Cancel", null)
+                                    .show();
+                            try {
+                                del.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(getResources().getColor(android.R.color.white));
+                                del.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(getResources().getColor(android.R.color.white));
+                            } catch (Exception ignored) {}
+                        }
+                    })
+                    .show();
+            // ensure the top-level list dialog has white buttons if any
+            try {
+                dlg.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(getResources().getColor(android.R.color.white));
+                dlg.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(getResources().getColor(android.R.color.white));
+            } catch (Exception ignored) {}
+            return true;
         });
 
         //allows for navigation between activities
@@ -138,7 +172,18 @@ public class PlaylistsActivity extends AppCompatActivity {
         TextView nowPlayingTitle = findViewById(com.example.tempo.R.id.nowPlayingTitle);
         View nowPlayingClickable = findViewById(com.example.tempo.R.id.nowPlayingClickable);
         View nowPlayingInclude = findViewById(com.example.tempo.R.id.nowPlayingInclude);
-        if (nowPlayingInclude != null) nowPlayingInclude.setVisibility(View.GONE);
+        // Decide whether to animate based on whether we are returning from the full player
+        boolean returningFromPlayer = com.example.tempo.ui.MusicPlayerActivity.shouldAnimateMiniBarOnReturn;
+        skipShowAnimation = !returningFromPlayer && com.example.tempo.Services.MediaPlaybackService.isActive;
+        if (nowPlayingInclude != null) {
+            if (skipShowAnimation && com.example.tempo.Services.MediaPlaybackService.currentTitle != null && !com.example.tempo.Services.MediaPlaybackService.currentTitle.isEmpty()) {
+                nowPlayingInclude.setVisibility(View.VISIBLE);
+                nowPlayingTitle.setText(com.example.tempo.Services.MediaPlaybackService.currentTitle);
+            } else {
+                nowPlayingInclude.setVisibility(View.GONE);
+            }
+        }
+        if (returningFromPlayer) com.example.tempo.ui.MusicPlayerActivity.shouldAnimateMiniBarOnReturn = false;
 
         // Setup media browser for live updates
         mediaBrowser = new MediaBrowserCompat(this, new ComponentName(this, com.example.tempo.Services.MediaPlaybackService.class),
@@ -189,24 +234,25 @@ public class PlaylistsActivity extends AppCompatActivity {
 
     private void showCreatePlaylistDialog() {
         final EditText input = new EditText(this);
-        new AlertDialog.Builder(this)
+        AlertDialog dlg = new AlertDialog.Builder(this)
                 .setTitle("Create Playlist")
                 .setView(input)
-                .setPositiveButton("Create", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        String name = input.getText().toString().trim();
-                        if (!name.isEmpty()) {
-                            long id = repository.createPlaylist(name);
-                            if (id == -1) {
-                                Toast.makeText(PlaylistsActivity.this, "Unable to create playlist (name may already exist)", Toast.LENGTH_SHORT).show();
-                            }
-                            loadPlaylists();
+                .setPositiveButton("Create", (dialog, which) -> {
+                    String name = input.getText().toString().trim();
+                    if (!name.isEmpty()) {
+                        long id = repository.createPlaylist(name);
+                        if (id == -1) {
+                            Toast.makeText(PlaylistsActivity.this, "Unable to create playlist (name may already exist)", Toast.LENGTH_SHORT).show();
                         }
+                        loadPlaylists();
                     }
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+        try {
+            dlg.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(getResources().getColor(android.R.color.white));
+            dlg.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(getResources().getColor(android.R.color.white));
+        } catch (Exception ignored) {}
     }
 
     private final MediaControllerCompat.Callback controllerCallback = new MediaControllerCompat.Callback() {
@@ -237,10 +283,15 @@ public class PlaylistsActivity extends AppCompatActivity {
         playBtn.setImageResource(playing ? com.example.tempo.R.drawable.ic_pause_icon : com.example.tempo.R.drawable.ic_play_icon);
 
         if (include.getVisibility() != View.VISIBLE) {
-            include.setVisibility(View.VISIBLE);
-            include.setTranslationY(include.getHeight());
-            include.setAlpha(0f);
-            include.animate().translationY(0).alpha(1f).setDuration(250).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+            if (skipShowAnimation) {
+                include.setVisibility(View.VISIBLE);
+                skipShowAnimation = false;
+            } else {
+                include.setVisibility(View.VISIBLE);
+                include.setTranslationY(include.getHeight());
+                include.setAlpha(0f);
+                include.animate().translationY(0).alpha(1f).setDuration(250).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+            }
         }
     }
 

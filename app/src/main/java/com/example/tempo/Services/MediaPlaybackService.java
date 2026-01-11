@@ -28,7 +28,9 @@ import com.example.tempo.R;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import android.Manifest;
 import android.content.pm.PackageManager;
 
@@ -40,6 +42,10 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
     public static final String ACTION_NEXT = "com.example.tempo.action.NEXT";
     public static final String ACTION_PREV = "com.example.tempo.action.PREV";
     public static final String ACTION_SEEK = "com.example.tempo.action.SEEK";
+    public static final String ACTION_TOGGLE_SHUFFLE = "com.example.tempo.action.TOGGLE_SHUFFLE";
+    public static final String ACTION_TOGGLE_REPEAT = "com.example.tempo.action.TOGGLE_REPEAT";
+    public static final String ACTION_SHUFFLE_CHANGED = "com.example.tempo.action.SHUFFLE_CHANGED";
+    public static final String ACTION_REPEAT_CHANGED = "com.example.tempo.action.REPEAT_CHANGED";
 
     public static final String EXTRA_PLAYLIST = "extra_playlist"; // ArrayList<File> (Serializable)
     public static final String EXTRA_POSITION = "extra_position";
@@ -63,6 +69,13 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
     public static volatile boolean isActive = false;
     public static volatile String currentTitle = "";
     public static volatile boolean isPlaying = false;
+
+    // Shuffle / repeat flags exposed for UI (AtomicBoolean to avoid non-atomic ops)
+    public static final AtomicBoolean shuffleEnabled = new AtomicBoolean(false);
+    public static final AtomicBoolean repeatEnabled = new AtomicBoolean(false);
+
+    private List<Integer> shuffleOrder = null;
+    private int shufflePos = 0;
 
     private final BroadcastReceiver noisyReceiver = new BroadcastReceiver() {
         @Override
@@ -109,6 +122,8 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
                         queueIndex = extras.getInt(EXTRA_POSITION, 0);
                     }
                     if (list != null && !list.isEmpty()) queue = list;
+                    // rebuild shuffle order when a new playlist is loaded and shuffle is enabled
+                    if (shuffleEnabled.get()) buildShuffleOrder();
                     playCurrent();
                     break;
                 }
@@ -138,6 +153,27 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
                     if (pos >= 0 && mediaPlayer != null) mediaPlayer.seekTo((int) pos);
                     updatePlaybackState(mediaPlayer != null && mediaPlayer.isPlaying() ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED);
                     updateNotification();
+                    break;
+                }
+                case ACTION_TOGGLE_SHUFFLE: {
+                    boolean newShuffle = !shuffleEnabled.get();
+                    shuffleEnabled.set(newShuffle);
+                    if (newShuffle) buildShuffleOrder(); else { shuffleOrder = null; }
+                    // notify clients
+                    try {
+                        Intent b = new Intent(ACTION_SHUFFLE_CHANGED).putExtra("enabled", newShuffle);
+                        sendBroadcast(b);
+                    } catch (Exception ignored) {}
+                    break;
+                }
+                case ACTION_TOGGLE_REPEAT: {
+                    boolean newRepeat = !repeatEnabled.get();
+                    repeatEnabled.set(newRepeat);
+                    if (mediaPlayer != null) mediaPlayer.setLooping(repeatEnabled.get());
+                    try {
+                        Intent b = new Intent(ACTION_REPEAT_CHANGED).putExtra("enabled", newRepeat);
+                        sendBroadcast(b);
+                    } catch (Exception ignored) {}
                     break;
                 }
             }
@@ -223,6 +259,7 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
             Uri uri = Uri.parse(f.toString());
             mediaPlayer = MediaPlayer.create(getApplicationContext(), uri);
             if (mediaPlayer == null) return;
+            mediaPlayer.setLooping(repeatEnabled.get());
             mediaPlayer.setAudioAttributes(new AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
             mediaPlayer.setOnCompletionListener(mp -> skipToNext());
             mediaPlayer.start();
@@ -257,16 +294,41 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
 
     private void skipToNext() {
         if (queue == null || queue.isEmpty()) return;
-        queueIndex = (queueIndex + 1) % queue.size();
+        if (shuffleEnabled.get() && queue.size() > 1) {
+            if (shuffleOrder == null || shuffleOrder.isEmpty()) buildShuffleOrder();
+            // advance to next position then play it
+            shufflePos = (shufflePos + 1) % shuffleOrder.size();
+            queueIndex = shuffleOrder.get(shufflePos);
+        } else {
+            queueIndex = (queueIndex + 1) % queue.size();
+        }
         playCurrent();
         mediaSession.setActive(true);
     }
 
     private void skipToPrevious() {
         if (queue == null || queue.isEmpty()) return;
-        queueIndex = (queueIndex - 1) < 0 ? queue.size() - 1 : queueIndex - 1;
+        if (shuffleEnabled.get() && queue.size() > 1) {
+            if (shuffleOrder == null || shuffleOrder.isEmpty()) buildShuffleOrder();
+            shufflePos = (shufflePos - 1 + shuffleOrder.size()) % shuffleOrder.size();
+            queueIndex = shuffleOrder.get(shufflePos);
+        } else {
+            queueIndex = (queueIndex - 1) < 0 ? queue.size() - 1 : queueIndex - 1;
+        }
         playCurrent();
         mediaSession.setActive(true);
+    }
+
+    private void buildShuffleOrder() {
+        if (queue == null || queue.size() <= 1) return;
+        shuffleOrder = new ArrayList<>();
+        for (int i = 0; i < queue.size(); i++) {
+            shuffleOrder.add(i);
+        }
+        Collections.shuffle(shuffleOrder);
+        // keep current track as the starting point in the shuffled order if present
+        int idx = shuffleOrder.indexOf(queueIndex);
+        shufflePos = Math.max(idx, 0);
     }
 
     private void updatePlaybackState(int state) {

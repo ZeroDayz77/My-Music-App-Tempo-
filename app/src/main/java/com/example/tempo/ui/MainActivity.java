@@ -53,6 +53,9 @@ import java.util.Objects;
 
 import androidx.appcompat.app.AlertDialog;
 import android.widget.EditText;
+import android.text.SpannableString;
+import android.text.style.ForegroundColorSpan;
+import android.content.res.Configuration;
 
 import com.example.tempo.repo.PlaylistRepository;
 import com.example.tempo.data.Playlist;
@@ -73,6 +76,7 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
     private static final int REQUEST_CODE_POST_NOTIFICATIONS = 9001;
 
     MediaBrowserCompat mediaBrowser; // for mini-bar live updates
+    private boolean skipShowAnimation = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -111,11 +115,33 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
         View nowPlayingClickable = findViewById(com.example.tempo.R.id.nowPlayingClickable);
         // initial visibility — toggle the whole include so it's fully hidden/shown
         View nowPlayingInclude = findViewById(com.example.tempo.R.id.nowPlayingInclude);
-        // leave include hidden by default
-        if (nowPlayingInclude != null) nowPlayingInclude.setVisibility(View.GONE);
+        // Decide whether to skip animation or animate based on whether we are returning from the full player
+        boolean returningFromPlayer = com.example.tempo.ui.MusicPlayerActivity.shouldAnimateMiniBarOnReturn;
+        // If returning from player, we want to animate the mini bar in; otherwise show immediately if service active
+        skipShowAnimation = !returningFromPlayer && com.example.tempo.Services.MediaPlaybackService.isActive;
+        if (nowPlayingInclude != null) {
+            if (skipShowAnimation && com.example.tempo.Services.MediaPlaybackService.currentTitle != null && !com.example.tempo.Services.MediaPlaybackService.currentTitle.isEmpty()) {
+                nowPlayingInclude.setVisibility(View.VISIBLE);
+                nowPlayingTitle.setText(com.example.tempo.Services.MediaPlaybackService.currentTitle);
+            } else {
+                nowPlayingInclude.setVisibility(View.GONE);
+            }
+        }
+        // Clear the return flag so we don't animate on subsequent activity switches
+        if (returningFromPlayer) com.example.tempo.ui.MusicPlayerActivity.shouldAnimateMiniBarOnReturn = false;
 
         nowPlayingClickable.setOnClickListener(v -> {
-            if (com.example.tempo.Services.MediaPlaybackService.isActive) {
+            if (!com.example.tempo.Services.MediaPlaybackService.isActive) return;
+            if (nowPlayingInclude != null && nowPlayingInclude.getVisibility() == View.VISIBLE) {
+                // animate out then open player
+                nowPlayingInclude.animate().translationY(nowPlayingInclude.getHeight()).alpha(0f).setDuration(180).withEndAction(() -> {
+                    nowPlayingInclude.setVisibility(View.GONE);
+                    Intent musicPlayerActivity = new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class);
+                    musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                    startActivity(musicPlayerActivity);
+                    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+                }).start();
+            } else {
                 Intent musicPlayerActivity = new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class);
                 musicPlayerActivity.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
                 startActivity(musicPlayerActivity);
@@ -399,12 +425,12 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
 
         CharSequence[] options = names.toArray(new CharSequence[0]);
 
-        new AlertDialog.Builder(this)
+        AlertDialog parentDlg = new AlertDialog.Builder(this)
                 .setTitle("Add to playlist")
                 .setItems(options, (dialog, which) -> {
                     if (which == playlists.size()) {
                         final EditText input = new EditText(MainActivity.this);
-                        new AlertDialog.Builder(MainActivity.this)
+                        AlertDialog createDlg = new AlertDialog.Builder(MainActivity.this)
                                 .setTitle("Create Playlist")
                                 .setView(input)
                                 .setPositiveButton("Create", (d, w) -> {
@@ -421,6 +447,10 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
                                 })
                                 .setNegativeButton("Cancel", null)
                                 .show();
+                        try {
+                            createDlg.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(getResources().getColor(android.R.color.white));
+                            createDlg.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(getResources().getColor(android.R.color.white));
+                        } catch (Exception ignored) {}
                     } else {
                         Playlist chosen = playlists.get(which);
                         if (playlistRepository.isSongInPlaylist(chosen.getId(), file.getAbsolutePath())) {
@@ -432,6 +462,17 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
                     }
                 })
                 .show();
+        try {
+            parentDlg.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(getResources().getColor(android.R.color.white));
+            parentDlg.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(getResources().getColor(android.R.color.white));
+        } catch (Exception ignored) {}
+
+        // Set dialog title color to white in night mode
+        if ((getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES) {
+            SpannableString title = new SpannableString("Add to playlist");
+            title.setSpan(new ForegroundColorSpan(getResources().getColor(android.R.color.white)), 0, title.length(), 0);
+            parentDlg.setTitle(title);
+        }
     }
 
     public class customAdapter extends BaseAdapter {
@@ -586,13 +627,17 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
         // update icon
         playBtn.setImageResource(playing ? com.example.tempo.R.drawable.ic_pause_icon : com.example.tempo.R.drawable.ic_play_icon);
 
-        // show/hide with animation
+        // show/hide with animation, but skip animation on initial startup when requested
         if (include.getVisibility() != View.VISIBLE) {
-            include.setVisibility(View.VISIBLE);
-            // slide up + fade in
-            include.setTranslationY(include.getHeight());
-            include.setAlpha(0f);
-            include.animate().translationY(0).alpha(1f).setDuration(250).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+            if (skipShowAnimation) {
+                include.setVisibility(View.VISIBLE);
+                skipShowAnimation = false;
+            } else {
+                include.setVisibility(View.VISIBLE);
+                include.setTranslationY(include.getHeight());
+                include.setAlpha(0f);
+                include.animate().translationY(0).alpha(1f).setDuration(250).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+            }
         }
     }
 }

@@ -3,7 +3,9 @@ package com.example.tempo.ui;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatButton;
+import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.content.ContextCompat;
 
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
@@ -12,6 +14,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.ComponentName;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.PorterDuff;
 import android.media.MediaPlayer;
 import android.os.Build;
@@ -37,9 +40,13 @@ import android.support.v4.media.session.MediaControllerCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.MediaBrowserCompat.ConnectionCallback;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.IntentFilter;
 
 public class MusicPlayerActivity extends AppCompatActivity implements com.example.tempo.ui.Playable {
-    AppCompatButton buttonPlay, skipSongNext, skipSongPrev, buttonShuffle, buttonRepeat;
+    AppCompatButton buttonPlay, skipSongNext, skipSongPrev;
+    AppCompatImageButton buttonShuffle, buttonRepeat;
     TextView songNameText, songStartTime, songEndTime;
     SeekBar seekbar;
     ImageView songImageView;
@@ -53,6 +60,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
     Handler seekHandler;
     Runnable seekRunnable;
     public static Bundle bundle;
+    public static volatile boolean shouldAnimateMiniBarOnReturn = false;
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
@@ -230,26 +238,82 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
             if (controller != null) controller.getTransportControls().skipToPrevious();
         });
 
-        buttonShuffle.setOnClickListener(view -> {
-            if (!isShuffleToggled) {
+        // Initialize shuffle/repeat icons and tints, then reflect service state
+        try {
+            int colorActive = ContextCompat.getColor(this, com.example.tempo.R.color.teal_700);
+            int colorInactive = ContextCompat.getColor(this, com.example.tempo.R.color.white);
+
+            // default unselected (white tint)
+            buttonShuffle.setImageResource(com.example.tempo.R.drawable.ic_shuffle_icon);
+            buttonShuffle.setImageTintList(ColorStateList.valueOf(colorInactive));
+            buttonRepeat.setImageResource(com.example.tempo.R.drawable.ic_repeat_icon);
+            buttonRepeat.setImageTintList(ColorStateList.valueOf(colorInactive));
+            isShuffleToggled = false;
+
+            // reflect service flags if active
+            if (com.example.tempo.Services.MediaPlaybackService.shuffleEnabled.get()) {
                 isShuffleToggled = true;
-                buttonShuffle.setBackgroundResource(com.example.tempo.R.drawable.ic_shuffle_selected_icon);
-            } else {
-                isShuffleToggled = false;
-                buttonShuffle.setBackgroundResource(com.example.tempo.R.drawable.ic_shuffle_icon);
+                buttonShuffle.setImageResource(com.example.tempo.R.drawable.ic_shuffle_selected_icon);
+                buttonShuffle.setImageTintList(ColorStateList.valueOf(colorActive));
             }
+            if (com.example.tempo.Services.MediaPlaybackService.repeatEnabled.get()) {
+                buttonRepeat.setImageResource(com.example.tempo.R.drawable.ic_repeat_selected_icon);
+                buttonRepeat.setImageTintList(ColorStateList.valueOf(colorActive));
+            }
+        } catch (Exception ignored) {}
+
+        // Toggle shuffle via service intent so behavior is centralized
+        buttonShuffle.setOnClickListener(view -> {
+            Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE_SHUFFLE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), intent);
+            } else {
+                startService(intent);
+            }
+
+            isShuffleToggled = !isShuffleToggled;
+            int colorActive = ContextCompat.getColor(this, com.example.tempo.R.color.teal_700);
+            int colorInactive = ContextCompat.getColor(this, com.example.tempo.R.color.white);
+            if (isShuffleToggled) {
+                buttonShuffle.setImageResource(com.example.tempo.R.drawable.ic_shuffle_selected_icon);
+                buttonShuffle.setImageTintList(ColorStateList.valueOf(colorActive));
+            } else {
+                buttonShuffle.setImageResource(com.example.tempo.R.drawable.ic_shuffle_icon);
+                buttonShuffle.setImageTintList(ColorStateList.valueOf(colorInactive));
+            }
+            // small press animation to make change obvious
+            buttonShuffle.setScaleX(0.95f);
+            buttonShuffle.setScaleY(0.95f);
+            buttonShuffle.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+            buttonShuffle.invalidate();
+            buttonShuffle.requestLayout();
         });
 
         buttonRepeat.setOnClickListener(view -> {
-            if (mediaPlayer != null) {
-                if (mediaPlayer.isLooping()) {
-                    mediaPlayer.setLooping(false);
-                    buttonRepeat.setBackgroundResource(com.example.tempo.R.drawable.ic_repeat_icon);
-                } else {
-                    mediaPlayer.setLooping(true);
-                    buttonRepeat.setBackgroundResource(com.example.tempo.R.drawable.ic_repeat_selected_icon);
-                }
+            // Toggle repeat via service intent
+            Intent intent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE_REPEAT);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), intent);
+            } else {
+                startService(intent);
             }
+            // Toggle UI immediately; service will apply looping and is authoritative
+            boolean newRepeat = !(com.example.tempo.Services.MediaPlaybackService.repeatEnabled.get());
+            int colorActive = ContextCompat.getColor(this, com.example.tempo.R.color.teal_700);
+            int colorInactive = ContextCompat.getColor(this, com.example.tempo.R.color.white);
+            if (newRepeat) {
+                buttonRepeat.setImageResource(com.example.tempo.R.drawable.ic_repeat_selected_icon);
+                buttonRepeat.setImageTintList(ColorStateList.valueOf(colorActive));
+            } else {
+                buttonRepeat.setImageResource(com.example.tempo.R.drawable.ic_repeat_icon);
+                buttonRepeat.setImageTintList(ColorStateList.valueOf(colorInactive));
+            }
+            // small press animation
+            buttonRepeat.setScaleX(0.95f);
+            buttonRepeat.setScaleY(0.95f);
+            buttonRepeat.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+            buttonRepeat.invalidate();
+            buttonRepeat.requestLayout();
         });
 
         BottomNavigationView bottomNavigationView = findViewById(com.example.tempo.R.id.bottomToolBar);
@@ -451,11 +515,15 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
         super.onPause();
         // Stop seekbar updates to avoid background thread accessing released objects
         stopSeekbarUpdate();
+        // Notify other activities to animate the mini bar when they become visible again
+        shouldAnimateMiniBarOnReturn = true;
     }
 
     @Override
     protected void onStop() {
         super.onStop();
+        // Unregister receiver for playback options
+        try { unregisterReceiver(playbackOptionsReceiver); } catch (Exception ignored) {}
         // Disconnect from the media browser service
         if (mediaBrowser != null) {
             mediaBrowser.disconnect();
@@ -514,6 +582,17 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
                     }
                 }, null);
         mediaBrowser.connect();
+        // Register receiver for playback options (shuffle/repeat changes)
+        try {
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(com.example.tempo.Services.MediaPlaybackService.ACTION_SHUFFLE_CHANGED);
+            filter.addAction(com.example.tempo.Services.MediaPlaybackService.ACTION_REPEAT_CHANGED);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(playbackOptionsReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(playbackOptionsReceiver, filter);
+            }
+        } catch (Exception ignored) {}
     }
 
     private final MediaControllerCompat.Callback controllerCallback = new MediaControllerCompat.Callback() {
@@ -529,15 +608,53 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
         @Override
         public void onPlaybackStateChanged(PlaybackStateCompat state) {
             super.onPlaybackStateChanged(state);
-            if (state != null && state.getState() == PlaybackStateCompat.STATE_PLAYING) {
-                buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_pause_icon);
-                startAnimation(songImageView);
-                startSeekbarUpdateThread();
-            } else {
-                buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_play_icon);
-                // Keep seekbar showing current position while paused; do not stop updates here.
+            runOnUiThread(() -> {
+                if (state != null && state.getState() == PlaybackStateCompat.STATE_PLAYING) {
+                    buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_pause_icon);
+                    startAnimation(songImageView);
+                    startSeekbarUpdateThread();
+                } else {
+                    buttonPlay.setBackgroundResource(com.example.tempo.R.drawable.ic_play_icon);
+                    // Keep seekbar showing current position while paused; do not stop updates here.
+                }
+
+                // Also refresh shuffle/repeat visuals from authoritative service state
+                try {
+                    boolean shuffleOn = com.example.tempo.Services.MediaPlaybackService.shuffleEnabled.get();
+                    boolean repeatOn = com.example.tempo.Services.MediaPlaybackService.repeatEnabled.get();
+                    int colorActive = ContextCompat.getColor(MusicPlayerActivity.this, com.example.tempo.R.color.teal_700);
+                    int colorInactive = ContextCompat.getColor(MusicPlayerActivity.this, com.example.tempo.R.color.white);
+                    buttonShuffle.setImageResource(shuffleOn ? com.example.tempo.R.drawable.ic_shuffle_selected_icon : com.example.tempo.R.drawable.ic_shuffle_icon);
+                    buttonShuffle.setImageTintList(ColorStateList.valueOf(shuffleOn ? colorActive : colorInactive));
+                    buttonRepeat.setImageResource(repeatOn ? com.example.tempo.R.drawable.ic_repeat_selected_icon : com.example.tempo.R.drawable.ic_repeat_icon);
+                    buttonRepeat.setImageTintList(ColorStateList.valueOf(repeatOn ? colorActive : colorInactive));
+                } catch (Exception ignored) {}
+            });
+         }
+     };
+
+    // Register/unregister receiver for shuffle/repeat changes
+    private final BroadcastReceiver playbackOptionsReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent != null) {
+                String action = intent.getAction();
+                if (com.example.tempo.Services.MediaPlaybackService.ACTION_SHUFFLE_CHANGED.equals(action)) {
+                    // Update shuffle button state
+                    boolean shuffleEnabled = com.example.tempo.Services.MediaPlaybackService.shuffleEnabled.get();
+                    buttonShuffle.setImageResource(shuffleEnabled ? com.example.tempo.R.drawable.ic_shuffle_selected_icon : com.example.tempo.R.drawable.ic_shuffle_icon);
+                    int colorActive = ContextCompat.getColor(context, com.example.tempo.R.color.teal_700);
+                    int colorInactive = ContextCompat.getColor(context, com.example.tempo.R.color.white);
+                    buttonShuffle.setImageTintList(ColorStateList.valueOf(shuffleEnabled ? colorActive : colorInactive));
+                } else if (com.example.tempo.Services.MediaPlaybackService.ACTION_REPEAT_CHANGED.equals(action)) {
+                    // Update repeat button state
+                    boolean repeatEnabled = com.example.tempo.Services.MediaPlaybackService.repeatEnabled.get();
+                    buttonRepeat.setImageResource(repeatEnabled ? com.example.tempo.R.drawable.ic_repeat_selected_icon : com.example.tempo.R.drawable.ic_repeat_icon);
+                    int colorActive = ContextCompat.getColor(context, com.example.tempo.R.color.teal_700);
+                    int colorInactive = ContextCompat.getColor(context, com.example.tempo.R.color.white);
+                    buttonRepeat.setImageTintList(ColorStateList.valueOf(repeatEnabled ? colorActive : colorInactive));
+                }
             }
         }
     };
 }
-
