@@ -29,7 +29,7 @@ This was a good learning experience and reinforced the reason to me as to why we
 
 - [x] On hold options for song select view that ask to: create a new playlist, add to an existing playlist, play next in the queue ( Coming Soon ), find on ( Coming Soon ), remove, etc.
 
-- [x] It must have a pause, skip back or forward, shuffle, repeat and or loop and raise volume feature. ( not fully implemented )
+- [x] It must have a pause, skip back or forward, shuffle, repeat and or loop and raise volume feature.
 
 - [x] Add a toolbar at the base of the app to switch between the song list view, playlist view, and current song playing.
 
@@ -47,7 +47,7 @@ This was a good learning experience and reinforced the reason to me as to why we
 
 - [x] It can have playlists that can be named, ordered ( Coming Soon ) and removed.
 
-- [x] A search or filter item on the list view/song list view. ( not fully implemented )
+- [x] A search or filter item on the list view/song list view.
 
 - [ ] And a user interface that allows changing or adding profiles if needed.
 
