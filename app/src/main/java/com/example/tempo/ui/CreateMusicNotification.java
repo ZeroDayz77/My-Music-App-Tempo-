@@ -1,4 +1,4 @@
-package com.example.tempo;
+package com.example.tempo.ui;
 
 import android.app.Notification;
 import android.app.PendingIntent;
@@ -6,10 +6,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.support.v4.media.session.MediaSessionCompat;
+import android.Manifest;
+import android.content.pm.PackageManager;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
 
 import com.example.tempo.Services.NotificationActionService;
 
@@ -38,7 +41,7 @@ public class CreateMusicNotification extends AppCompatActivity {
                 pendingIntentPrevious = PendingIntent.getBroadcast(
                         context, 0, intentPrevious, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
                 );
-                drw_prev = R.drawable.ic_skip_previous_icon;
+                drw_prev = com.example.tempo.R.drawable.ic_skip_previous_icon;
             }
 
             Intent intentPlay = new Intent(context, NotificationActionService.class)
@@ -58,14 +61,14 @@ public class CreateMusicNotification extends AppCompatActivity {
                 pendingIntentNext = PendingIntent.getBroadcast(
                         context, 0, intentNext, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
                 );
-                drw_next = R.drawable.ic_skip_next_icon;
+                drw_next = com.example.tempo.R.drawable.ic_skip_next_icon;
             }
 
             // Notification creation
             notification = new NotificationCompat.Builder(context, CHANNEL_ID)
-                    .setContentTitle(context.getString(R.string.app_name))
+                    .setContentTitle(context.getString(com.example.tempo.R.string.app_name))
                     .setContentText("Currently Playing: " + currentSong)
-                    .setSmallIcon(R.drawable.ic_music)
+                    .setSmallIcon(com.example.tempo.R.drawable.ic_music)
                     .setShowWhen(false)
                     .setOnlyAlertOnce(true)
                     .setSilent(true)
@@ -79,7 +82,14 @@ public class CreateMusicNotification extends AppCompatActivity {
                     .setPriority(NotificationCompat.PRIORITY_LOW)
                     .build();
 
-            managerCompat.notify(1, notification);
+            // Ensure we have POST_NOTIFICATIONS permission on Android 13+ before notifying
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                    managerCompat.notify(1, notification);
+                }
+            } else {
+                managerCompat.notify(1, notification);
+            }
         }
     }
 }

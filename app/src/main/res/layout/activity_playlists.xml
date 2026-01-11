@@ -18,7 +18,7 @@
         android:layout_marginEnd="30dp"
         android:layout_marginBottom="110dp"
         android:clickable="true"
-        android:contentDescription="TODO"
+        android:contentDescription="Background for playlist activity"
         android:focusable="true"
         app:backgroundTint="#FFFFFF"
         app:srcCompat="@drawable/ic_new_playlist_white_icon" />
