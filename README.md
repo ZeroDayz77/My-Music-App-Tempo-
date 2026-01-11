@@ -21,13 +21,13 @@ This was a good learning experience and reinforced the reason to me as to why we
 
 - [x] Identify and access .mp3 ( or .wave ) files on the mobile device. And ignore other audio files.
 
-- [x] It must list the name of the song along with the artist if available and display the song's graphic and time stamp.
+- [x] It must list the name of the song along with the artist, if available and display the song's graphic and time stamp.
 
-- [x] Add the time of each song to the song select view. ( only got to a default placeholder )
+- [ ] Add the time of each song to the song select view.
 
 - [ ] Share song option.
 
-- [ ] Oh hold options for song select view that ask to: create a new playlist, add to an existing playlist, play next in the queue, find on, remove, etc.
+- [x] On hold options for song select view that ask to: create a new playlist, add to an existing playlist, play next in the queue ( Coming Soon ), find on ( Coming Soon ), remove, etc.
 
 - [x] It must have a pause, skip back or forward, shuffle, repeat and or loop and raise volume feature. ( not fully implemented )
 
@@ -35,40 +35,41 @@ This was a good learning experience and reinforced the reason to me as to why we
 
 - [x] Must be able to use offline.
 
-- [x] Must be able to keep playing if the phone is asleep or if the app is not actively open with the same UI being able to be used either on the home screen or dropdown. ( not fully implemented )
+- [x] Must be able to keep playing if the phone is asleep or if the app is not actively open, with the same UI being able to be used either on the home screen or the dropdown.
 
 ### **Non-functional Tasks**
 
-- [ ] Indication that shows which song is playing whether it be a general library or playlist, and a way to interact with it like Spotify. Or a YouTube playlist.
+- [x] Indication that shows which song is playing, whether it be a general library or playlist, and a way to interact with it, like Spotify. Or a YouTube playlist.
 
 - [x] App Icon
 
-- [ ] Notification that pops up outside of the app whether on sleep or out, that allows you to skip, play/pause, etc. ( There is code for it but the current version doesn't fully implement it )
+- [x] Notification that pops up outside of the app, whether on sleep or out, that allows you to skip, play/pause, etc.
 
-- [ ] It can have playlists, that can be named, ordered and removed.
+- [x] It can have playlists that can be named, ordered ( Coming Soon ) and removed.
 
 - [x] A search or filter item on the list view/song list view. ( not fully implemented )
 
-- [ ] And user interface that allows to change or add profiles if needed.
+- [ ] And a user interface that allows changing or adding profiles if needed.
 
-- [ ] Must pause / lower on an incoming call or notification and resume or return to normal after.
+- [x] Must pause / lower on an incoming call or notification and resume or return to normal after.
 
 - [x] Detect headphone usage.
 
 - [ ] Have customizable themes like dark mode.
 
-- [ ] A button that says "Find on YouTube" that uses the YouTube API and searches for that song you click "find" on YouTube for and sends you there ( can also have the timestamps sync if possible but not needed )
+- [ ] A button that says "Find on YouTube" that uses the YouTube API and searches for that song you click "find" on YouTube for and sends you there ( can also have the timestamps sync if possible, but not needed )
 
-- [ ] Find on... button can also be an expanded feature that you click and then choose what platform you want to search for it, ie: Spotify, Soundcloud, YouTube, etc.
+- [ ] Find on... button can also be an expanded feature that you click and then choose what platform you want to search for it, ie, Spotify, Soundcloud, YouTube, etc.
 
 - [ ] Custom Audio mixer/eq.
 
-### **Main Issues** ( to name a few... )
+### **Issues** ( to name a few... )
 
-> _Seek bar doesn't dynamically track or doesn't always add up to the time duration._
+> _Memory Usage Not Optimised._
 
-> _Seek bar doesn't update after each new song to make it dynamic._
+> _Application Theme Feels Outdated._
 
-> _Make shuffle and loop/repeat toggle buttons to work as intended._
+> _Lacking In Unit Testing._
 
-> _No search functionality._
+### Last Updated:
+January 11th, 2026
