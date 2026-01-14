@@ -33,7 +33,7 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 import android.view.Menu;
 import androidx.appcompat.widget.SearchView;
 
-public class PlaylistDetailActivity extends AppCompatActivity {
+public class PlaylistDetailActivity extends BaseBottomNavActivity {
 
     private PlaylistRepository repository;
     private int playlistId;
@@ -65,7 +65,6 @@ public class PlaylistDetailActivity extends AppCompatActivity {
 
         // Bottom toolbar / mini-bar wiring
         BottomNavigationView bottomNavigationView = findViewById(com.example.tempo.R.id.bottomToolBar);
-        bottomNavigationView.setSelectedItemId(com.example.tempo.R.id.playlistButton);
         bottomNavigationView.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
             if (id == com.example.tempo.R.id.songLibraryButton) {
@@ -331,5 +330,10 @@ public class PlaylistDetailActivity extends AppCompatActivity {
             }
         });
         return true;
+    }
+
+    @Override
+    protected int getNavigationItemId() {
+        return com.example.tempo.R.id.playlistButton;
     }
 }

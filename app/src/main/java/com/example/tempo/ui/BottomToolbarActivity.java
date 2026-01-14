@@ -17,7 +17,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-public class BottomToolbarActivity extends AppCompatActivity {
+public class BottomToolbarActivity extends BaseBottomNavActivity {
     // Use the shared player reference from MainActivity so nav checks are consistent
 
     private AdView adView;
@@ -37,8 +37,6 @@ public class BottomToolbarActivity extends AppCompatActivity {
         adView.loadAd(adRequest);
 
         BottomNavigationView bottomNavigationView=findViewById(com.example.tempo.R.id.bottomToolBar);
-
-        bottomNavigationView.setSelectedItemId(com.example.tempo.R.id.songLibraryButton);
 
         bottomNavigationView.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
             @Override
@@ -74,5 +72,10 @@ public class BottomToolbarActivity extends AppCompatActivity {
                 return false;
             }
         });
+    }
+
+    @Override
+    protected int getNavigationItemId() {
+        return com.example.tempo.R.id.songLibraryButton;
     }
 }

@@ -1,7 +1,6 @@
 package com.example.tempo.ui;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatButton;
 import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.appcompat.widget.Toolbar;
@@ -22,6 +21,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageView;
@@ -44,7 +45,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.IntentFilter;
 
-public class MusicPlayerActivity extends AppCompatActivity implements com.example.tempo.ui.Playable {
+public class MusicPlayerActivity extends BaseBottomNavActivity implements com.example.tempo.ui.Playable {
     AppCompatButton buttonPlay, skipSongNext, skipSongPrev;
     AppCompatImageButton buttonShuffle, buttonRepeat;
     TextView songNameText, songStartTime, songEndTime;
@@ -64,11 +65,39 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        if (item.getItemId()==android.R.id.home)
-        {
+        int id = item.getItemId();
+        int lyricsId = com.example.tempo.R.id.menu_lyrics;
+        if (id == android.R.id.home) {
             onBackPressed();
+            return true;
+        } else if (id == lyricsId) {
+            // Open LyricsActivity and pass song info
+            Intent intent = new Intent(this, com.example.tempo.ui.LyricsActivity.class);
+            // prefer metadata if available
+            String artist = null;
+            try {
+                if (mediaController != null && mediaController.getMetadata() != null) {
+                    artist = mediaController.getMetadata().getString(MediaMetadataCompat.METADATA_KEY_ARTIST);
+                }
+            } catch (Exception ignored) {}
+            intent.putExtra("song_name", songName != null ? songName : "");
+            intent.putExtra("song_artist", artist != null ? artist : "");
+            // pass file uri if available
+            if (mySongs != null && mySongs.size() > position && position >= 0) {
+                intent.putExtra("song_uri", mySongs.get(position).getAbsolutePath());
+            }
+            startActivity(intent);
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+            return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(com.example.tempo.R.menu.menu_music_player, menu);
+        return true;
     }
 
 
@@ -414,6 +443,13 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
                 }
                 // update UI immediately so it doesn't snap back
                 seekbar.setProgress(newPos);
+
+                // Notify LyricsActivity immediately about the user seek so synced lyrics can jump to the new position
+                try {
+                    Intent seekIntent = new Intent("com.example.tempo.ACTION_USER_SEEK");
+                    seekIntent.putExtra("seek_position_ms", (long) newPos);
+                    getApplicationContext().sendBroadcast(seekIntent);
+                } catch (Exception ignored) {}
              }
          });
      }
@@ -657,4 +693,10 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
             }
         }
     };
+
+
+    @Override
+    protected int getNavigationItemId() {
+        return com.example.tempo.R.id.songPlayingButton;
+    }
 }

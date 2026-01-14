@@ -60,7 +60,7 @@ import android.content.res.Configuration;
 import com.example.tempo.repo.PlaylistRepository;
 import com.example.tempo.data.Playlist;
 
-public class MainActivity extends AppCompatActivity implements com.example.tempo.ui.Playable {
+public class MainActivity extends BaseBottomNavActivity implements com.example.tempo.ui.Playable {
     ListView listView;
     String[] items;
     SearchView searchView;
@@ -596,6 +596,11 @@ public class MainActivity extends AppCompatActivity implements com.example.tempo
             nowPlayingTitle.setVisibility(View.GONE);
             nowPlayingClickable.setVisibility(View.GONE);
         }
+    }
+
+    @Override
+    protected int getNavigationItemId() {
+        return com.example.tempo.R.id.songLibraryButton;
     }
 
     private final MediaControllerCompat.Callback controllerCallback = new MediaControllerCompat.Callback() {
