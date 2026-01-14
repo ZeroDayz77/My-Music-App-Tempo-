@@ -1,7 +1,6 @@
 package com.example.tempo.ui;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatButton;
 import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.appcompat.widget.Toolbar;
@@ -46,7 +45,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.IntentFilter;
 
-public class MusicPlayerActivity extends AppCompatActivity implements com.example.tempo.ui.Playable {
+public class MusicPlayerActivity extends BaseBottomNavActivity implements com.example.tempo.ui.Playable {
     AppCompatButton buttonPlay, skipSongNext, skipSongPrev;
     AppCompatImageButton buttonShuffle, buttonRepeat;
     TextView songNameText, songStartTime, songEndTime;
@@ -444,6 +443,13 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
                 }
                 // update UI immediately so it doesn't snap back
                 seekbar.setProgress(newPos);
+
+                // Notify LyricsActivity immediately about the user seek so synced lyrics can jump to the new position
+                try {
+                    Intent seekIntent = new Intent("com.example.tempo.ACTION_USER_SEEK");
+                    seekIntent.putExtra("seek_position_ms", (long) newPos);
+                    getApplicationContext().sendBroadcast(seekIntent);
+                } catch (Exception ignored) {}
              }
          });
      }
@@ -687,4 +693,10 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
             }
         }
     };
+
+
+    @Override
+    protected int getNavigationItemId() {
+        return com.example.tempo.R.id.songPlayingButton;
+    }
 }

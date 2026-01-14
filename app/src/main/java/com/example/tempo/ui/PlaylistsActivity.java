@@ -34,7 +34,7 @@ import android.support.v4.media.session.MediaControllerCompat;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 
-public class PlaylistsActivity extends AppCompatActivity {
+public class PlaylistsActivity extends BaseBottomNavActivity {
     private Toolbar toolbar;
 
     private PlaylistRepository repository;
@@ -315,5 +315,10 @@ public class PlaylistsActivity extends AppCompatActivity {
     public void onBackPressed() {
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         super.onBackPressed();
+    }
+
+    @Override
+    protected int getNavigationItemId() {
+        return com.example.tempo.R.id.playlistButton;
     }
 }
