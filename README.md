@@ -1,6 +1,6 @@
 # Tempo
 
-This mobile app MVP was not only initially created in 2 weeks to challenge myself but to also act as a way to show my skill in learning new technologies and adapting to the task given to me.
+This mobile app MVP was not only initially created in 2 weeks to challenge myself, but also acted as a way to show my skill in learning new technologies and adapting to the task given to me.
 
 <p align="middle">
   <img src="https://github.com/ZeroDayz77/My-Music-App-Tempo-/assets/22108801/b4b04043-1929-404b-8be2-98ef1aa669a2" width="500" />
@@ -9,7 +9,7 @@ This mobile app MVP was not only initially created in 2 weeks to challenge mysel
   <img src="https://github.com/ZeroDayz77/My-Music-App-Tempo-/assets/22108801/5e09fe88-ff1c-4d8c-9084-b07c6a6a87f3" width="500" />
 </p>
 
-This was a good learning experience and reinforced the reason to me as to why we do computer science and technology as a hold, to solve real-world problems. The problem for me was, I no longer had a music app. There were many issues, unused features and ideas. Here I will list them and a few other things to assist others who may come across my repo and use it for their gain as well:
+This was a good learning experience and reinforced the reason for me as to why we do computer science and technology as a hold, to solve real-world problems. The problem for me was that I no longer had a music app. There were many issues, unused features and ideas. Here I will list them and a few other things to assist others who may come across my repo and use it for their gain as well:
 
 ## **Problem Statement**
 
@@ -26,6 +26,8 @@ This was a good learning experience and reinforced the reason to me as to why we
 - [ ] Add the time of each song to the song select view.
 
 - [ ] Share song option.
+
+- [x] Plaintext & LRC-formatted Synced Lyrics
 
 - [x] On hold options for song select view that ask to: create a new playlist, add to an existing playlist, play next in the queue ( Coming Soon ), find on ( Coming Soon ), remove, etc.
 
@@ -72,4 +74,4 @@ This was a good learning experience and reinforced the reason to me as to why we
 > _Lacking In Unit Testing._
 
 ### Last Updated:
-January 11th, 2026
+January 14th, 2026
