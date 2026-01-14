@@ -1,0 +1,695 @@
+package com.example.tempo.ui;
+
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.os.Bundle;
+import android.os.Handler;
+import android.text.TextUtils;
+import android.view.MenuItem;
+import android.view.MotionEvent;
+import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
+import androidx.core.widget.TextViewCompat;
+import android.annotation.SuppressLint;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
+import androidx.appcompat.app.AlertDialog;
+
+import com.example.tempo.repo.LyricsRepository;
+import com.example.tempo.lyrics.LrcLibLyricsProvider;
+import com.example.tempo.lyrics.LyricsProvider;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class LyricsActivity extends AppCompatActivity {
+    TextView lyricsPlainText;
+    TextView lyricsStatus;
+    ScrollView lyricsScroll;
+    LinearLayout lyricsLinesContainer;
+    FloatingActionButton fabToggle;
+    LyricsRepository repo;
+
+    String songName;
+    String songArtist;
+    String songUri;
+
+    Handler uiHandler = new Handler();
+    LyricsProvider provider = new LrcLibLyricsProvider();
+    boolean showingSynced = true; // toggle state
+    private SharedPreferences prefs;
+    private static final String PREFS_NAME = "lyrics_prefs";
+    private static final String KEY_SHOW_SYNCED = "show_synced";
+
+    private long songStartSystemTimeMs = 0;
+    private long songStartPositionMs = 0;
+
+    // For synced lyrics
+    static class LrcLine {
+        long timeMs;
+        String text;
+    }
+
+    List<LrcLine> lrcLines = new ArrayList<>();
+    boolean autoScroll = true;
+    int currentIndex = 0;
+
+    // Increase to make highlighting appear earlier; keep small (e.g., 100-250ms) for perceived responsiveness.
+    private static final int HIGHLIGHT_LEAD_MS = 250;
+
+    Runnable highlightRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!autoScroll || lrcLines.isEmpty()) return;
+
+            long nowMs = getCurrentPlaybackPosition() + HIGHLIGHT_LEAD_MS;
+
+            // binary search for the current index (largest i where timeMs <= nowMs)
+            int lo = 0, hi = lrcLines.size() - 1, found = -1;
+            while (lo <= hi) {
+                int mid = (lo + hi) >>> 1;
+                long t = lrcLines.get(mid).timeMs;
+                if (t <= nowMs) {
+                    found = mid;
+                    lo = mid + 1;
+                } else {
+                    hi = mid - 1;
+                }
+            }
+            currentIndex = Math.max(0, found);
+            // update UI: if found == -1, clear highlights and schedule until first timestamp
+            if (found < 0) {
+                clearAllHighlights();
+                long firstTime = lrcLines.get(0).timeMs;
+                long diff = firstTime - nowMs;
+                long delay = diff > 0 ? Math.min(Math.max(diff, 50), 2000) : 500;
+                uiHandler.postDelayed(this, delay);
+                return;
+            }
+
+            // highlight and scroll
+            highlightLine(currentIndex);
+
+            // schedule next update > target the next timestamp
+            long delay = 500;
+            if (currentIndex + 1 < lrcLines.size()) {
+                long nextTime = lrcLines.get(currentIndex + 1).timeMs;
+                long diff = nextTime - nowMs;
+                if (diff > 0) delay = Math.min(Math.max(diff, 50), 2000);
+                else delay = 200;
+            }
+            uiHandler.postDelayed(this, delay);
+        }
+    };
+
+    private long getCurrentPlaybackPosition() {
+        try {
+            android.support.v4.media.session.MediaControllerCompat controller = android.support.v4.media.session.MediaControllerCompat.getMediaController(LyricsActivity.this);
+            if (controller == null) {
+                // fall back to local baseline if available
+                if (songStartSystemTimeMs > 0) {
+                    long now = android.os.SystemClock.elapsedRealtime();
+                    long delta = now - songStartSystemTimeMs;
+                    return songStartPositionMs + delta;
+                }
+                return 0;
+            }
+            android.support.v4.media.session.PlaybackStateCompat state = controller.getPlaybackState();
+            if (state == null) return 0;
+            long pos = state.getPosition();
+            long lastUpdate = state.getLastPositionUpdateTime();
+            float speed = state.getPlaybackSpeed();
+            long now = android.os.SystemClock.elapsedRealtime();
+            if (lastUpdate > 0) {
+                long delta = now - lastUpdate;
+                // advance position by playback speed * elapsed ms
+                pos += (long) (delta * speed);
+            } else {
+                // Some playback implementations may not supply lastUpdate; fall back to our baseline if set
+                if (songStartSystemTimeMs > 0) {
+                    long delta = now - songStartSystemTimeMs;
+                    pos = songStartPositionMs + (long) (delta * (double) Math.max(0.0f, speed));
+                }
+            }
+            return pos;
+        } catch (Exception ignored) {}
+        return 0;
+    }
+
+    @Override
+    @SuppressLint("ClickableViewAccessibility")
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(com.example.tempo.R.layout.activity_lyrics);
+
+        Toolbar toolbar = findViewById(com.example.tempo.R.id.lyricsToolbar);
+        setSupportActionBar(toolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setTitle("Song");
+        }
+
+        lyricsPlainText = findViewById(com.example.tempo.R.id.lyricsPlainText);
+        lyricsStatus = findViewById(com.example.tempo.R.id.lyricsStatus);
+        lyricsScroll = findViewById(com.example.tempo.R.id.lyricsScroll);
+        lyricsLinesContainer = findViewById(com.example.tempo.R.id.lyricsLinesContainer);
+        fabToggle = findViewById(com.example.tempo.R.id.fabToggle);
+
+        // Initialize prefs and FAB immediately so it's active even if cached lyrics cause early return
+        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        showingSynced = prefs.getBoolean(KEY_SHOW_SYNCED, true);
+        try {
+            android.graphics.drawable.Drawable d = androidx.core.content.ContextCompat.getDrawable(this, android.R.drawable.ic_menu_view);
+            if (d != null) {
+                fabToggle.setImageDrawable(d);
+                fabToggle.setImageTintList(android.content.res.ColorStateList.valueOf(getResources().getColor(com.example.tempo.R.color.teal_700)));
+            }
+        } catch (Exception ignored) {}
+        updateFabIcon();
+        fabToggle.setOnClickListener(v -> {
+            showingSynced = !showingSynced;
+            prefs.edit().putBoolean(KEY_SHOW_SYNCED, showingSynced).apply();
+            updateFabIcon();
+            if (showingSynced) {
+                // stop plain auto-scroll if running
+                lyricsPlainText.setVisibility(View.GONE);
+                lyricsLinesContainer.setVisibility(lrcLines.isEmpty() ? View.GONE : View.VISIBLE);
+                autoScroll = true;
+                uiHandler.removeCallbacks(highlightRunnable);
+                uiHandler.post(highlightRunnable);
+            } else {
+                // switch to plain: stop highlight loop
+                uiHandler.removeCallbacks(highlightRunnable);
+                autoScroll = false; // highlight loop disabled
+                lyricsLinesContainer.setVisibility(View.GONE);
+
+                // Populate plain text if empty: prefer persisted DB plain lyrics, else join lrcLines
+                String key = songUri != null ? songUri : songName;
+                boolean filled = false;
+                if (TextUtils.isEmpty(lyricsPlainText.getText())) {
+                    if (key != null) {
+                        try {
+                            String[] existing = repo.load(key);
+                            if (existing != null && !TextUtils.isEmpty(existing[0])) {
+                                lyricsPlainText.setText(existing[0]);
+                                filled = true;
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    if (!filled && !lrcLines.isEmpty()) {
+                        StringBuilder sb = new StringBuilder();
+                        for (int i = 0; i < lrcLines.size(); i++) {
+                            if (i > 0) sb.append('\n');
+                            sb.append(lrcLines.get(i).text == null ? "" : lrcLines.get(i).text);
+                        }
+                        if (sb.length() > 0) {
+                            lyricsPlainText.setText(sb.toString());
+                            filled = true;
+                        }
+                    }
+                } else {
+                    filled = lyricsPlainText.getText().length() > 0;
+                }
+
+                if (!filled) {
+                    // nothing to show yet > start a fetch and show retry/status
+                    lyricsStatus.setVisibility(View.VISIBLE);
+                    lyricsStatus.setText(getString(com.example.tempo.R.string.lyrics_looking_up));
+                    fetchAndStoreLyrics();
+                } else {
+                    // ensure plain text is visible and readable
+                    lyricsPlainText.setTextColor(getResources().getColor(android.R.color.white));
+                    lyricsPlainText.setVisibility(View.VISIBLE);
+                    // reset scroll to top so content is visible
+                    lyricsScroll.post(() -> lyricsScroll.scrollTo(0, 0));
+                    // plain view intentionally does NOT auto-scroll; just show the text
+                }
+            }
+        });
+
+        // Ensure scroll view reports clicks for accessibility and linting
+        lyricsScroll.setClickable(true);
+        lyricsScroll.setOnClickListener(v -> {
+            // no-op; ensures performClick is implemented on the view
+        });
+
+        // Increase base font size a bit and make plain text match synced-lines appearance
+        lyricsPlainText.setTextSize(20);
+        TextViewCompat.setTextAppearance(lyricsPlainText, android.R.style.TextAppearance_Material_Body1);
+        lyricsPlainText.setPadding(0, dpToPx(12), 0, dpToPx(12));
+
+        repo = new LyricsRepository(this);
+
+        songName = getIntent().getStringExtra("song_name");
+        songArtist = getIntent().getStringExtra("song_artist");
+        songUri = getIntent().getStringExtra("song_uri");
+
+        String key = songUri != null ? songUri : (songName != null ? songName : null);
+
+        if (key != null) {
+            String[] loaded = repo.load(key);
+            if (loaded != null) {
+                // show cached lyrics
+                if (!TextUtils.isEmpty(loaded[1])) {
+                    showSyncedLyrics(loaded[1]);
+                } else if (!TextUtils.isEmpty(loaded[0])) {
+                    lyricsPlainText.setText(loaded[0]);
+                }
+                return;
+            }
+        }
+
+        if (isOnline()) {
+            lyricsStatus.setVisibility(View.VISIBLE);
+            lyricsStatus.setText(getString(com.example.tempo.R.string.lyrics_looking_up_retry));
+            lyricsStatus.setOnClickListener(v -> {
+                // allow retry
+                lyricsStatus.setText(getString(com.example.tempo.R.string.lyrics_looking_up));
+                fetchAndStoreLyrics();
+            });
+            fetchAndStoreLyrics();
+        } else {
+            lyricsStatus.setVisibility(View.VISIBLE);
+            lyricsStatus.setText(getString(com.example.tempo.R.string.lyrics_offline));
+        }
+
+        // Pause auto-scroll on user touch, resume after 3s of inactivity
+        // Attach touch listener to inner container to avoid ScrollView performClick lint
+        lyricsLinesContainer.setOnTouchListener(new View.OnTouchListener() {
+            boolean userTouch = false;
+            final Runnable resumeRunnable = () -> {
+                autoScroll = true;
+                uiHandler.post(highlightRunnable);
+            };
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN || event.getAction() == MotionEvent.ACTION_MOVE) {
+                    userTouch = true;
+                    autoScroll = false;
+                    uiHandler.removeCallbacks(resumeRunnable);
+                } else if (event.getAction() == MotionEvent.ACTION_UP) {
+                    // resume after 3s
+                    uiHandler.removeCallbacks(resumeRunnable);
+                    uiHandler.postDelayed(resumeRunnable, 3000);
+                    // accessibility > report click
+                    v.performClick();
+                }
+                return false;
+            }
+        });
+    }
+
+    private void fetchAndStoreLyrics() {
+        // show looking-up state when starting a fetch
+        lyricsStatus.setVisibility(View.VISIBLE);
+        lyricsStatus.setText(getString(com.example.tempo.R.string.lyrics_looking_up));
+
+        new Thread(() -> {
+            final String titleToLookup = songName != null ? songName.trim() : "";
+            // strip file extensions if present
+            final String strippedTitle = titleToLookup.replaceAll("(?i)\\.(mp3|wav|flac|m4a)$", "");
+            // Use searchCandidates to provide a chooser when multiple matches exist
+            java.util.List<com.example.tempo.lyrics.LrcLibLyricsProvider.Candidate> candidates = null;
+            try {
+                if (provider instanceof com.example.tempo.lyrics.LrcLibLyricsProvider) {
+                    candidates = ((com.example.tempo.lyrics.LrcLibLyricsProvider) provider).searchCandidates(strippedTitle);
+                }
+            } catch (Exception ignored) {}
+
+            final java.util.List<com.example.tempo.lyrics.LrcLibLyricsProvider.Candidate> finalCandidates = candidates;
+            runOnUiThread(() -> {
+                if (finalCandidates != null && finalCandidates.size() > 1) {
+                    // Show chooser
+                    CharSequence[] items = new CharSequence[finalCandidates.size()];
+                    for (int i = 0; i < finalCandidates.size(); i++) {
+                        com.example.tempo.lyrics.LrcLibLyricsProvider.Candidate c = finalCandidates.get(i);
+                        String artist = c.artistName != null ? (" — " + c.artistName) : "";
+                        items[i] = (c.trackName != null ? c.trackName : "Unknown") + artist;
+                    }
+                    AlertDialog.Builder b = new AlertDialog.Builder(LyricsActivity.this);
+                    b.setTitle("Choose lyrics");
+                    b.setItems(items, (dialog, which) -> {
+                        com.example.tempo.lyrics.LrcLibLyricsProvider.Candidate chosen = finalCandidates.get(which);
+                        showCandidateAndSave(chosen);
+                    });
+                    b.setNegativeButton("Cancel", (d, w) -> { d.dismiss(); });
+                    androidx.appcompat.app.AlertDialog dlg = b.create();
+                    dlg.show();
+                    try {
+                        int nightMode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+                        if (nightMode == Configuration.UI_MODE_NIGHT_YES) {
+                            android.widget.Button neg = dlg.getButton(android.content.DialogInterface.BUTTON_NEGATIVE);
+                            if (neg != null) neg.setTextColor(getResources().getColor(android.R.color.white));
+                        }
+                    } catch (Exception ignored) {}
+                     return;
+                 }
+
+                if (finalCandidates != null && finalCandidates.size() == 1) {
+                    showCandidateAndSave(finalCandidates.get(0));
+                    return;
+                }
+
+                // Fallback: use provider.lookup (exact match behavior)
+                String[] result = provider.lookup(strippedTitle, songArtist);
+                if (result != null && (!TextUtils.isEmpty(result[0]) || !TextUtils.isEmpty(result[1]))) {
+                    String plain = result[0];
+                    String lrc = result[1];
+                    if (!TextUtils.isEmpty(lrc)) {
+                        showSyncedLyrics(lrc);
+                        if (!showingSynced) {
+                            lyricsLinesContainer.setVisibility(View.GONE);
+                            lyricsPlainText.setVisibility(View.VISIBLE);
+                        }
+                    } else {
+                        lyricsPlainText.setText(plain);
+                    }
+                    lyricsStatus.setVisibility(View.GONE);
+                    String key = songUri != null ? songUri : songName;
+                    repo.save(key, plain, lrc);
+                } else {
+                    // Enter retryable error state
+                    lyricsStatus.setVisibility(View.VISIBLE);
+                    lyricsStatus.setText(getString(com.example.tempo.R.string.lyrics_looking_up_retry));
+                    lyricsStatus.setOnClickListener(v -> {
+                        lyricsStatus.setText(getString(com.example.tempo.R.string.lyrics_looking_up));
+                        fetchAndStoreLyrics();
+                    });
+                }
+            });
+        }).start();
+    }
+
+    private void showCandidateAndSave(com.example.tempo.lyrics.LrcLibLyricsProvider.Candidate c) {
+        String plain = c.plainLyrics;
+        String lrc = c.syncedLyrics;
+        String key = songUri != null ? songUri : songName;
+        repo.save(key, plain, lrc);
+        if (!TextUtils.isEmpty(lrc)) {
+            showSyncedLyrics(lrc);
+            if (!showingSynced) {
+                lyricsLinesContainer.setVisibility(View.GONE);
+                lyricsPlainText.setVisibility(View.VISIBLE);
+            }
+        } else {
+            lyricsPlainText.setText(plain);
+        }
+        lyricsStatus.setVisibility(View.GONE);
+    }
+
+    private void showSyncedLyrics(String lrcText) {
+        if (TextUtils.isEmpty(lrcText)) return;
+        lrcLines.clear();
+        // parse LRC timestamps like [mm:ss.xx] or [hh:mm:ss.xx]
+        Pattern p = Pattern.compile("\\[(\\d{1,2}):(\\d{2})(?:\\.(\\d{1,3}))?]\\s*(.*)");
+        String[] lines = lrcText.split("\\r?\\n");
+        for (String ln : lines) {
+            Matcher m = p.matcher(ln);
+            if (m.find()) {
+                try {
+                    String g1 = m.group(1);
+                    String g2 = m.group(2);
+                    String g3 = m.group(3);
+                    String g4 = m.group(4);
+                    if (g1 == null || g2 == null) continue;
+                    int min = Integer.parseInt(g1);
+                    int sec = Integer.parseInt(g2);
+                    int ms = 0;
+                    if (g3 != null) {
+                        if (g3.length() == 1) ms = Integer.parseInt(g3) * 100;
+                        else if (g3.length() == 2) ms = Integer.parseInt(g3) * 10;
+                        else ms = Integer.parseInt(g3);
+                    }
+                    long timeMs = (long) min * 60L * 1000L + (long) sec * 1000L + (long) ms;
+                    String text = g4 != null ? g4 : "";
+                    LrcLine ll = new LrcLine();
+                    ll.timeMs = timeMs;
+                    ll.text = text;
+                    lrcLines.add(ll);
+                } catch (Exception ignored) {}
+            }
+        }
+        if (lrcLines.isEmpty()) {
+            // not true LRC text — fallback to plain
+            lyricsPlainText.setText(lrcText);
+            return;
+        }
+        // sort by time (compatible with API 21+)
+        Collections.sort(lrcLines, (a, b) -> Long.compare(a.timeMs, b.timeMs));
+
+        // populate views
+        lyricsLinesContainer.removeAllViews();
+        for (LrcLine ll : lrcLines) {
+            TextView tv = new TextView(this);
+            tv.setText(ll.text);
+            tv.setTextSize(20); // slightly larger
+            TextViewCompat.setTextAppearance(tv, android.R.style.TextAppearance_Material_Body1);
+            tv.setPadding(0, 12, 0, 12);
+            // set initial alpha slightly reduced for animation
+            tv.setAlpha(0.95f);
+            lyricsLinesContainer.addView(tv);
+        }
+        lyricsPlainText.setVisibility(View.GONE);
+        lyricsLinesContainer.setVisibility(View.VISIBLE);
+
+        // Set local playback clock baseline: prefer the MediaController playback state if available
+        try {
+            android.support.v4.media.session.MediaControllerCompat controller = android.support.v4.media.session.MediaControllerCompat.getMediaController(LyricsActivity.this);
+            if (controller != null && controller.getPlaybackState() != null) {
+                android.support.v4.media.session.PlaybackStateCompat st = controller.getPlaybackState();
+                long stPos = st.getPosition();
+                long stLast = st.getLastPositionUpdateTime();
+                if (stLast > 0) {
+                    songStartPositionMs = stPos + (long) ((android.os.SystemClock.elapsedRealtime() - stLast) * st.getPlaybackSpeed());
+                    songStartSystemTimeMs = android.os.SystemClock.elapsedRealtime();
+                } else {
+                    songStartPositionMs = stPos;
+                    songStartSystemTimeMs = android.os.SystemClock.elapsedRealtime();
+                }
+            } else {
+                // fallback: assume just-started baseline
+                songStartPositionMs = 0;
+                songStartSystemTimeMs = android.os.SystemClock.elapsedRealtime();
+            }
+        } catch (Exception ignored) {
+            songStartPositionMs = 0;
+            songStartSystemTimeMs = android.os.SystemClock.elapsedRealtime();
+        }
+
+        // start auto highlight loop after the layout is ready
+        autoScroll = true;
+        currentIndex = 0;
+        uiHandler.removeCallbacks(highlightRunnable);
+        lyricsLinesContainer.post(() -> uiHandler.postDelayed(highlightRunnable, 150));
+    }
+
+    private void highlightLine(int index) {
+        int childCount = lyricsLinesContainer.getChildCount();
+        if (childCount == 0) return;
+        if (index < 0) {
+            // clear all highlights
+            for (int i = 0; i < childCount; i++) {
+                View child = lyricsLinesContainer.getChildAt(i);
+                if (child instanceof TextView) {
+                    ((TextView) child).setTextColor(getResources().getColor(android.R.color.white));
+                 }
+             }
+             return;
+         }
+         if (index >= childCount) index = childCount - 1;
+         for (int i = 0; i < childCount; i++) {
+             View child = lyricsLinesContainer.getChildAt(i);
+             if (child instanceof TextView) {
+                 TextView tv = (TextView) child;
+                 if (i == index) {
+                    tv.setTextColor(getResources().getColor(com.example.tempo.R.color.teal_700));
+                    // scroll to make it visible after layout
+                    final int y = tv.getTop();
+                    lyricsScroll.post(() -> lyricsScroll.smoothScrollTo(0, y));
+                 } else {
+                    tv.setTextColor(getResources().getColor(android.R.color.white));
+                 }
+              }
+          }
+      }
+
+     private int dpToPx(int dp) {
+         float density = getResources().getDisplayMetrics().density;
+         return Math.round(dp * density);
+     }
+
+    private void clearAllHighlights() {
+        int childCount = lyricsLinesContainer.getChildCount();
+        for (int i = 0; i < childCount; i++) {
+            View child = lyricsLinesContainer.getChildAt(i);
+            if (child instanceof TextView) ((TextView) child).setTextColor(getResources().getColor(android.R.color.white));
+        }
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(android.view.Menu menu) {
+        getMenuInflater().inflate(com.example.tempo.R.menu.menu_lyrics, menu);
+        try {
+            android.view.MenuItem it = menu.findItem(com.example.tempo.R.id.action_refresh_lyrics);
+            if (it != null && it.getIcon() != null) {
+                it.getIcon().setTint(getResources().getColor(android.R.color.white));
+            }
+        } catch (Exception ignored) {}
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == com.example.tempo.R.id.action_refresh_lyrics) {
+            // Refresh: re-fetch lyrics and if different update UI & DB
+            lyricsStatus.setVisibility(View.VISIBLE);
+            lyricsStatus.setText(getString(com.example.tempo.R.string.lyrics_looking_up));
+            new Thread(() -> {
+                final String titleToLookup = songName != null ? songName.trim() : "";
+                final String strippedTitle = titleToLookup.replaceAll("(?i)\\.(mp3|wav|flac|m4a)$", "");
+                java.util.List<com.example.tempo.lyrics.LrcLibLyricsProvider.Candidate> candidates = null;
+                try {
+                    if (provider instanceof com.example.tempo.lyrics.LrcLibLyricsProvider) {
+                        candidates = ((com.example.tempo.lyrics.LrcLibLyricsProvider) provider).searchCandidates(strippedTitle);
+                    }
+                } catch (Exception ignored) {}
+
+                final java.util.List<com.example.tempo.lyrics.LrcLibLyricsProvider.Candidate> finalCandidates = candidates;
+                runOnUiThread(() -> {
+                    if (finalCandidates != null && finalCandidates.size() > 1) {
+                        // chooser
+                        CharSequence[] items = new CharSequence[finalCandidates.size()];
+                        for (int i = 0; i < finalCandidates.size(); i++) {
+                            com.example.tempo.lyrics.LrcLibLyricsProvider.Candidate c = finalCandidates.get(i);
+                            String artist = c.artistName != null ? (" — " + c.artistName) : "";
+                            items[i] = (c.trackName != null ? c.trackName : "Unknown") + artist;
+                        }
+                        AlertDialog.Builder b = new AlertDialog.Builder(LyricsActivity.this);
+                        b.setTitle("Choose lyrics");
+                        b.setItems(items, (dialog, which) -> {
+                            com.example.tempo.lyrics.LrcLibLyricsProvider.Candidate chosen = finalCandidates.get(which);
+                            // save and show
+                            String key = songUri != null ? songUri : songName;
+                            repo.save(key, chosen.plainLyrics, chosen.syncedLyrics);
+                            if (!TextUtils.isEmpty(chosen.syncedLyrics)) showSyncedLyrics(chosen.syncedLyrics);
+                            else lyricsPlainText.setText(chosen.plainLyrics);
+                            lyricsStatus.setVisibility(View.GONE);
+                        });
+                        b.setNegativeButton("Cancel", (d, w) -> d.dismiss());
+                        androidx.appcompat.app.AlertDialog dlg = b.create();
+                        dlg.show();
+                        try {
+                            int nightMode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+                            if (nightMode == Configuration.UI_MODE_NIGHT_YES) {
+                                android.widget.Button neg = dlg.getButton(android.content.DialogInterface.BUTTON_NEGATIVE);
+                                if (neg != null) neg.setTextColor(getResources().getColor(android.R.color.white));
+                            }
+                        } catch (Exception ignored) {}
+                        return;
+                    }
+
+                    if (finalCandidates != null && finalCandidates.size() == 1) {
+                        com.example.tempo.lyrics.LrcLibLyricsProvider.Candidate c = finalCandidates.get(0);
+                        String plain = c.plainLyrics;
+                        String lrc = c.syncedLyrics;
+                        String key = songUri != null ? songUri : songName;
+                        String[] existing = repo.load(key);
+                        boolean different = true;
+                        if (existing != null) {
+                            String ePlain = existing[0];
+                            String eLrc = existing[1];
+                            different = !((ePlain == null ? "" : ePlain).equals(plain == null ? "" : plain) && (eLrc == null ? "" : eLrc).equals(lrc == null ? "" : lrc));
+                        }
+                        if (different) {
+                            repo.save(key, plain, lrc);
+                            if (!TextUtils.isEmpty(lrc)) showSyncedLyrics(lrc);
+                            else lyricsPlainText.setText(plain);
+                            lyricsStatus.setText(getString(com.example.tempo.R.string.lyrics_updated));
+                        } else {
+                            lyricsStatus.setText(getString(com.example.tempo.R.string.lyrics_up_to_date));
+                            uiHandler.postDelayed(() -> lyricsStatus.setVisibility(View.GONE), 1500);
+                        }
+                        uiHandler.postDelayed(() -> lyricsStatus.setVisibility(View.GONE), 800);
+                        return;
+                    }
+
+                    // fallback to lookup behavior
+                    String[] result = provider.lookup(strippedTitle, songArtist);
+                    if (result != null && (!TextUtils.isEmpty(result[0]) || !TextUtils.isEmpty(result[1]))) {
+                        String plain = result[0];
+                        String lrc = result[1];
+                        String key = songUri != null ? songUri : songName;
+                        String[] existing = repo.load(key);
+                        boolean different = true;
+                        if (existing != null) {
+                            String ePlain = existing[0];
+                            String eLrc = existing[1];
+                            different = !((ePlain == null ? "" : ePlain).equals(plain == null ? "" : plain) && (eLrc == null ? "" : eLrc).equals(lrc == null ? "" : lrc));
+                        }
+                        if (different) {
+                            repo.save(key, plain, lrc);
+                            if (!TextUtils.isEmpty(lrc)) showSyncedLyrics(lrc);
+                            else lyricsPlainText.setText(plain);
+                            lyricsStatus.setText(getString(com.example.tempo.R.string.lyrics_updated));
+                        } else {
+                            lyricsStatus.setText(getString(com.example.tempo.R.string.lyrics_up_to_date));
+                            uiHandler.postDelayed(() -> lyricsStatus.setVisibility(View.GONE), 1500);
+                        }
+                        uiHandler.postDelayed(() -> lyricsStatus.setVisibility(View.GONE), 800);
+                    }
+                });
+            }).start();
+             return true;
+         }
+         return super.onOptionsItemSelected(item);
+     }
+
+    private boolean isOnline() {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return false;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                android.net.Network nw = cm.getActiveNetwork();
+                if (nw == null) return false;
+                android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(nw);
+                return caps != null && (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET));
+            } else {
+                NetworkInfo ni = cm.getActiveNetworkInfo();
+                return ni != null && ni.isConnected();
+            }
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        uiHandler.removeCallbacksAndMessages(null);
+    }
+
+    private void updateFabIcon() {
+        try {
+            if (showingSynced) {
+                fabToggle.setImageResource(android.R.drawable.ic_menu_view);
+                fabToggle.setContentDescription("Synced lyrics");
+            } else {
+                fabToggle.setImageResource(android.R.drawable.ic_menu_edit);
+                fabToggle.setContentDescription("Plain lyrics");
+            }
+            fabToggle.setImageTintList(android.content.res.ColorStateList.valueOf(getResources().getColor(com.example.tempo.R.color.teal_700)));
+        } catch (Exception ignored) {}
+    }
+}

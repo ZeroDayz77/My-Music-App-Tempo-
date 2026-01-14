@@ -8,6 +8,11 @@
     <string name="action_settings">Settings</string>
 
     <string name="menu_home">Home</string>
-    <string name="menu_gallery">Gallery</string>
-    <string name="menu_slideshow">Slideshow</string>
+    <string name="menu_lyrics">Lyrics</string>
+    <string name="lyrics_looking_up">Looking up lyrics...</string>
+    <string name="lyrics_looking_up_retry">Looking up lyrics... (tap to retry)</string>
+    <string name="lyrics_offline">Lyrics not available offline. Connect to the internet to search.</string>
+    <string name="lyrics_not_found">Lyrics not found. Try again later.</string>
+    <string name="lyrics_updated">Lyrics updated</string>
+    <string name="lyrics_up_to_date">Lyrics are up to date</string>
 </resources>

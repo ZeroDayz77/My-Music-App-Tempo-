@@ -22,6 +22,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageView;
@@ -64,11 +66,39 @@ public class MusicPlayerActivity extends AppCompatActivity implements com.exampl
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        if (item.getItemId()==android.R.id.home)
-        {
+        int id = item.getItemId();
+        int lyricsId = com.example.tempo.R.id.menu_lyrics;
+        if (id == android.R.id.home) {
             onBackPressed();
+            return true;
+        } else if (id == lyricsId) {
+            // Open LyricsActivity and pass song info
+            Intent intent = new Intent(this, com.example.tempo.ui.LyricsActivity.class);
+            // prefer metadata if available
+            String artist = null;
+            try {
+                if (mediaController != null && mediaController.getMetadata() != null) {
+                    artist = mediaController.getMetadata().getString(MediaMetadataCompat.METADATA_KEY_ARTIST);
+                }
+            } catch (Exception ignored) {}
+            intent.putExtra("song_name", songName != null ? songName : "");
+            intent.putExtra("song_artist", artist != null ? artist : "");
+            // pass file uri if available
+            if (mySongs != null && mySongs.size() > position && position >= 0) {
+                intent.putExtra("song_uri", mySongs.get(position).getAbsolutePath());
+            }
+            startActivity(intent);
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+            return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(com.example.tempo.R.menu.menu_music_player, menu);
+        return true;
     }
 
 
