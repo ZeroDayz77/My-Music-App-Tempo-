@@ -28,7 +28,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
@@ -36,6 +35,9 @@ import androidx.core.content.ContextCompat;
 
 import com.example.tempo.Services.OnClearRecentService;
 import com.example.tempo.Services.MediaPlaybackService;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.MobileAds;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 import com.karumi.dexter.Dexter;
@@ -78,6 +80,9 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
     MediaBrowserCompat mediaBrowser; // for mini-bar live updates
     private boolean skipShowAnimation = false;
 
+    // AdView reference
+    private AdView adView;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -91,6 +96,20 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
             createChannel();
             // clear-recent service (keeps app from restarting unexpectedly)
             startService(new Intent(getBaseContext(), OnClearRecentService.class));
+        }
+
+        MobileAds.initialize(this, initializationStatus -> { /* no-op */ });
+
+        // Find AdView and load an ad
+        try {
+            adView = findViewById(com.example.tempo.R.id.adView);
+            if (adView != null) {
+
+                AdRequest adRequest = new AdRequest.Builder().build();
+                adView.loadAd(adRequest);
+            }
+        } catch (Exception e) {
+            Log.e("MainActivity", "Failed to load AdView", e);
         }
 
         Toolbar toolbar = findViewById(com.example.tempo.R.id.tempoToolBar);
@@ -567,6 +586,13 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
                 mediaBrowser = null;
             }
         } catch (Exception ignored) {}
+
+        // Destroy ad view
+        if (adView != null) {
+            try {
+                adView.destroy();
+            } catch (Exception ignored) {}
+        }
     }
 
 
@@ -596,6 +622,20 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
             nowPlayingTitle.setVisibility(View.GONE);
             nowPlayingClickable.setVisibility(View.GONE);
         }
+
+        // Resume ad view
+        if (adView != null) {
+            adView.resume();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        // Pause ad view
+        if (adView != null) {
+            adView.pause();
+        }
+        super.onPause();
     }
 
     @Override

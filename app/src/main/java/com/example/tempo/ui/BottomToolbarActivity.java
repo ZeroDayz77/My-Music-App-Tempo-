@@ -7,34 +7,19 @@ import android.os.Bundle;
 import android.view.MenuItem;
 import android.widget.Toast;
 
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.AdView;
-import com.google.android.gms.ads.MobileAds;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.navigation.NavigationBarView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
 
 public class BottomToolbarActivity extends BaseBottomNavActivity {
     // Use the shared player reference from MainActivity so nav checks are consistent
-
-    private AdView adView;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(com.example.tempo.R.layout.bottom_tool_bar);
-
-        new Thread(
-                () -> {
-                    MobileAds.initialize(this, initializationStatus -> {});
-                })
-                .start();
-        adView = findViewById(com.example.tempo.R.id.adView);
-        AdRequest adRequest = new AdRequest.Builder().build();
-        adView.loadAd(adRequest);
 
         BottomNavigationView bottomNavigationView=findViewById(com.example.tempo.R.id.bottomToolBar);
 
