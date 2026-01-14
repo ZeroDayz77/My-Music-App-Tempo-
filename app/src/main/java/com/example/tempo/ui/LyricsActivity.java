@@ -37,6 +37,7 @@ import android.content.IntentFilter;
 import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.ViewGroup;
+import com.example.tempo.util.AdManager;
 
 public class LyricsActivity extends BaseBottomNavActivity {
      TextView lyricsPlainText;
@@ -1121,5 +1122,19 @@ public class LyricsActivity extends BaseBottomNavActivity {
     protected int getNavigationItemId() {
         // Lyrics screen isn't directly represented in bottom nav; return 0 to avoid selecting any item
         return 0;
+    }
+
+    @Override
+    public void onBackPressed() {
+        // Suppress a subsequent interstitial when returning to the Music Player
+        try { AdManager.suppressNextInterstitial(this); } catch (Exception ignored) {}
+        super.onBackPressed();
+    }
+
+    @Override
+    public boolean onSupportNavigateUp() {
+        try { AdManager.suppressNextInterstitial(this); } catch (Exception ignored) {}
+        finish();
+        return true;
     }
 }

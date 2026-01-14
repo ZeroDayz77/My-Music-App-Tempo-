@@ -17,15 +17,12 @@
 
     </FrameLayout>
 
-    <com.google.android.gms.ads.AdView
-        android:id="@+id/adView"
+    <include
+        android:id="@+id/nowPlayingInclude"
+        layout="@layout/now_playing_bar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_centerHorizontal="true"
-        android:layout_above="@id/bottomToolBar"
-        app:adSize="BANNER"
-        app:adUnitId="ca-app-pub-5675914922459331/2458838497"
-        tools:ignore="MissingConstraints"/>
+        android:layout_height="56dp"
+        android:layout_above="@id/bottomToolBar" />
 
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:background="@color/black"
@@ -33,13 +30,18 @@
         android:layout_width="match_parent"
         android:layout_height="56dp"
         style="@style/Widget.MaterialComponents.BottomNavigationView.Colored"
-        android:layout_alignParentBottom="true"
+        android:layout_above="@id/adView"
         app:menu="@menu/bottomtoolbarmenu"/>
 
-    <include
-        android:id="@+id/nowPlayingInclude"
-        layout="@layout/now_playing_bar"
+    <com.google.android.gms.ads.AdView
+        android:id="@+id/adView"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:layout_above="@id/bottomToolBar" />
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        app:adSize="BANNER"
+        app:adUnitId="ca-app-pub-3940256099942544/9214589741"
+        tools:ignore="MissingConstraints"/>
+<!--    Test Ad Unit Id   -->
+
 </RelativeLayout>

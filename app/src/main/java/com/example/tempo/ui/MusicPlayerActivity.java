@@ -31,6 +31,12 @@ import android.widget.TextView;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.example.tempo.Services.MediaPlaybackService;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.LoadAdError;
+import com.google.android.gms.ads.interstitial.InterstitialAd;
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
+import com.google.android.gms.ads.FullScreenContentCallback;
+import com.example.tempo.util.AdManager;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -62,6 +68,19 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
     Runnable seekRunnable;
     public static Bundle bundle;
     public static volatile boolean shouldAnimateMiniBarOnReturn = false;
+
+    // Interstitial ad
+    private InterstitialAd mInterstitialAd;
+    private boolean interstitialShown = false;
+    private boolean interstitialShowing = false;
+    private boolean adFailedToLoad = false;
+    private boolean playbackStarted = false;
+    private boolean connectedToService = false;
+    private boolean pausedByActivity = false; // we paused playback on entering activity
+    private boolean wasPlayingBefore = false;
+    private boolean interstitialLoaded = false;
+    private boolean activityOpenedFromLyrics = false;
+    private boolean suppressAdOnResume = false;
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
@@ -154,6 +173,7 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
         // Support alternate keys from other activities
         String altSongName = i.getStringExtra("song_name");
         String altSongUri = i.getStringExtra("song_uri");
+        activityOpenedFromLyrics = i.getBooleanExtra("from_lyrics", false);
 
         if (bundle != null) {
             // prefer explicit song_name (from playlist) over songname
@@ -362,6 +382,140 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
             }
             return false;
         });
+
+        // Disable playback controls until interstitial is handled (shown or failed)
+        setControlsEnabled(false);
+
+        // Pause playback immediately if the service is currently playing; we'll resume after the ad.
+        try {
+            wasPlayingBefore = com.example.tempo.Services.MediaPlaybackService.isPlaying;
+            if (wasPlayingBefore) {
+                Intent pauseIntent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PAUSE);
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), pauseIntent); else startService(pauseIntent);
+                    pausedByActivity = true;
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+
+        // Start loading interstitial immediately so it can be shown as soon as possible.
+        try {
+            if (AdManager.shouldShowInterstitial(this) && !activityOpenedFromLyrics) {
+                AdRequest adRequest = new AdRequest.Builder().build();
+                String interstitialAdUnit = getString(com.example.tempo.R.string.music_player_interstitial_ad_unit_id);
+                InterstitialAd.load(this, interstitialAdUnit, adRequest, new InterstitialAdLoadCallback() {
+                    @Override
+                    public void onAdLoaded(@NonNull InterstitialAd interstitialAd) {
+                        mInterstitialAd = interstitialAd;
+                        interstitialLoaded = true;
+                        mInterstitialAd.setFullScreenContentCallback(new FullScreenContentCallback() {
+                            @Override
+                            public void onAdDismissedFullScreenContent() {
+                                interstitialShown = true;
+                                interstitialShowing = false;
+                                // Re-enable controls
+                                setControlsEnabled(true);
+                                // mark cooldown so we don't show again immediately
+                                AdManager.markInterstitialShown(MusicPlayerActivity.this);
+                                // If we paused playback on entry, resume now. Prefer mediaController if connected, otherwise send service intent.
+                                try {
+                                    if (pausedByActivity) {
+                                        if (mediaController != null) {
+                                            mediaController.getTransportControls().play();
+                                        } else {
+                                            Intent playIntent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE);
+                                            try {
+                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), playIntent); else startService(playIntent);
+                                            } catch (Exception ignored) {}
+                                        }
+                                        playbackStarted = true;
+                                        pausedByActivity = false;
+                                    } else {
+                                        startPlaybackIfReady();
+                                    }
+                                } catch (Exception ignored) {}
+                            }
+
+                            @Override
+                            public void onAdFailedToShowFullScreenContent(@NonNull com.google.android.gms.ads.AdError adError) {
+                                interstitialShown = true;
+                                interstitialShowing = false;
+                                setControlsEnabled(true);
+                                AdManager.markInterstitialShown(MusicPlayerActivity.this);
+                                try {
+                                    if (pausedByActivity) {
+                                        if (mediaController != null) {
+                                            mediaController.getTransportControls().play();
+                                        } else {
+                                            Intent playIntent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE);
+                                            try {
+                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), playIntent); else startService(playIntent);
+                                            } catch (Exception ignored) {}
+                                        }
+                                        playbackStarted = true;
+                                        pausedByActivity = false;
+                                    } else {
+                                        startPlaybackIfReady();
+                                    }
+                                } catch (Exception ignored) {}
+                            }
+
+                            @Override
+                            public void onAdShowedFullScreenContent() {
+                                // no-op
+                            }
+                        });
+                        // If activity is resumed, show immediately; otherwise onResume() will show it.
+                        tryShowInterstitialIfReady();
+                    }
+
+                    @Override
+                    public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                        adFailedToLoad = true;
+                        // Re-enable controls and proceed to start playback when service connects
+                        setControlsEnabled(true);
+                        AdManager.markInterstitialShown(MusicPlayerActivity.this);
+                        try {
+                            if (pausedByActivity) {
+                                if (mediaController != null) {
+                                    mediaController.getTransportControls().play();
+                                } else {
+                                    Intent playIntent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE);
+                                    try {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), playIntent); else startService(playIntent);
+                                    } catch (Exception ignored) {}
+                                }
+                                playbackStarted = true;
+                                pausedByActivity = false;
+                            } else {
+                                startPlaybackIfReady();
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                });
+            } else {
+                // Not allowed to show interstitial now; re-enable controls and continue
+                setControlsEnabled(true);
+                // If we paused playback immediately above, resume
+                try {
+                    if (pausedByActivity) {
+                        Intent playIntent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), playIntent); else startService(playIntent);
+                        playbackStarted = true;
+                        pausedByActivity = false;
+                    }
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+    }
+
+    // Enable/disable primary playback controls while ad flow is in progress
+    private void setControlsEnabled(boolean enabled) {
+        try {
+            if (buttonPlay != null) buttonPlay.setEnabled(enabled);
+            if (skipSongNext != null) skipSongNext.setEnabled(enabled);
+            if (skipSongPrev != null) skipSongPrev.setEnabled(enabled);
+        } catch (Exception ignored) {}
     }
 
     private void startSeekbarUpdateThread() {
@@ -540,10 +694,68 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
     @Override
     protected void onResume() {
         super.onResume();
-        // restart seekbar update thread if needed (use MediaController)
+        tryShowInterstitialIfReady();
+
+        // Ensure seekbar thread restarts if needed
         if (mediaController != null) {
             if (seekHandler == null) startSeekbarUpdateThread();
         }
+    }
+
+    // Show the interstitial if it's loaded and the activity is in the foreground
+    private void tryShowInterstitialIfReady() {
+        try {
+            if (mInterstitialAd != null && !interstitialShown && !interstitialShowing && !isFinishing() && !isDestroyed()) {
+                // Ensure playback is paused before showing the ad
+                pausePlaybackForAd();
+                interstitialShowing = true;
+                mInterstitialAd.show(MusicPlayerActivity.this);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    // Pause playback immediately so the ad shows silently; mark that we paused it so we can resume later
+    private void pausePlaybackForAd() {
+        try {
+            // Prefer controller pause if available
+            try {
+                if (mediaController != null) {
+                    PlaybackStateCompat state = mediaController.getPlaybackState();
+                    if (state != null && state.getState() == PlaybackStateCompat.STATE_PLAYING) {
+                        mediaController.getTransportControls().pause();
+                        pausedByActivity = true;
+                        return;
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            // Fallback: use service-level flag and send ACTION_PAUSE to service
+            try {
+                if (com.example.tempo.Services.MediaPlaybackService.isPlaying) {
+                    Intent pauseIntent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PAUSE);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), pauseIntent); else startService(pauseIntent);
+                    pausedByActivity = true;
+                }
+            } catch (Exception ignored) {}
+        } catch (Exception ignored) {}
+    }
+
+    private void startPlaybackIfReady() {
+        try {
+            if (playbackStarted) return;
+            if (!connectedToService) return;
+            if (mediaController == null) return;
+            if (mySongs == null || mySongs.isEmpty()) return;
+
+            // Only start playback when either the interstitial has been shown (user closed it)
+            // or the ad failed to load. This prevents music from starting while the ad is visible.
+            if (interstitialShown || adFailedToLoad) {
+                try {
+                    mediaController.getTransportControls().play();
+                    playbackStarted = true;
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
     }
 
     @Override
@@ -584,6 +796,13 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
                         mediaController = new MediaControllerCompat(MusicPlayerActivity.this, mediaBrowser.getSessionToken());
                         MediaControllerCompat.setMediaController(MusicPlayerActivity.this, mediaController);
 
+                        // If an interstitial is pending (loaded but not yet dismissed), make sure playback is paused immediately
+                        try {
+                            if (!interstitialShown && !adFailedToLoad) {
+                                pausePlaybackForAd();
+                            }
+                        } catch (Exception ignored) {}
+
                         // Update UI with current metadata
                         MediaMetadataCompat metadata = mediaController.getMetadata();
                         if (metadata != null) {
@@ -595,9 +814,9 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
                         startSeekbarUpdateThread();
 
                         // Start the playback if there is a song loaded
-                        if (mySongs != null && !mySongs.isEmpty()) {
-                            mediaController.getTransportControls().play();
-                        }
+                        // mark connected and attempt to start playback (will wait for ad dismissal)
+                        connectedToService = true;
+                        startPlaybackIfReady();
 
                         // Register callback to receive updates
                         mediaController.registerCallback(controllerCallback);
@@ -629,6 +848,8 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
                 registerReceiver(playbackOptionsReceiver, filter);
             }
         } catch (Exception ignored) {}
+
+        // Interstitial is already loaded in onCreate so it can be shown as soon as the activity is resumed.
     }
 
     private final MediaControllerCompat.Callback controllerCallback = new MediaControllerCompat.Callback() {

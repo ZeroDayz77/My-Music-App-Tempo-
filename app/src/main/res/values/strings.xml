@@ -15,4 +15,7 @@
     <string name="lyrics_not_found">Lyrics not found. Try again later.</string>
     <string name="lyrics_updated">Lyrics updated</string>
     <string name="lyrics_up_to_date">Lyrics are up to date</string>
+
+    <!-- Interstitial ad unit id for MusicPlayerActivity. Test ad unit ID -->
+    <string name="music_player_interstitial_ad_unit_id">ca-app-pub-3940256099942544/1033173712</string>
 </resources>
