@@ -423,10 +423,12 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
 
             // Open player UI (activity will connect to the service)
             String songName = mySongs.get(position).getName().replace(".mp3", "").replace(".wav", "");
-            startActivity(new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class)
+            Intent playerIntent = new Intent(getApplicationContext(), com.example.tempo.ui.MusicPlayerActivity.class)
                     .putExtra("songname", songName)
-                    .putExtra("pos", position));
-            overridePendingTransition(0, 0);
+                    .putExtra("pos", position)
+                    .putExtra("songs", playList);
+            startActivity(playerIntent);
+             overridePendingTransition(0, 0);
         });
 
         listView.setOnItemLongClickListener((parent, view, position, id) -> {

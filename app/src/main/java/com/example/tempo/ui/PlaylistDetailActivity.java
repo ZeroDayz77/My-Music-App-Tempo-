@@ -23,6 +23,7 @@ import com.example.tempo.data.PlaylistItem;
 import com.example.tempo.repo.PlaylistRepository;
 
 import java.util.ArrayList;
+import java.io.File;
 
 import android.support.v4.media.MediaBrowserCompat;
 import android.support.v4.media.session.MediaControllerCompat;
@@ -164,13 +165,35 @@ public class PlaylistDetailActivity extends BaseBottomNavActivity {
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                // Play song from playlist using MusicPlayerActivity
-                PlaylistItem item = items.get(position);
-                Intent intent = new Intent(PlaylistDetailActivity.this, com.example.tempo.ui.MusicPlayerActivity.class);
-                // pass the uri and title
-                intent.putExtra("song_uri", item.getUri());
-                intent.putExtra("song_name", item.getTitle());
-                startActivity(intent);
+                try {
+                    ArrayList<PlaylistItem> visible = playlistItemAdapter.getFiltered();
+                    if (visible == null || visible.isEmpty()) return;
+                    PlaylistItem item = visible.get(position);
+
+                    ArrayList<File> playList = new ArrayList<>();
+                    for (PlaylistItem it : visible) {
+                        try { playList.add(new File(it.getUri())); } catch (Exception ignored) {}
+                    }
+
+                    // Start playback with the playlist context
+                    Intent serviceIntent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class)
+                            .setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PLAY)
+                            .putExtra(com.example.tempo.Services.MediaPlaybackService.EXTRA_PLAYLIST, playList)
+                            .putExtra(com.example.tempo.Services.MediaPlaybackService.EXTRA_POSITION, position);
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), serviceIntent);
+                    } else {
+                        startService(serviceIntent);
+                    }
+
+                    // Open player UI with same playlist and position
+                    Intent intent = new Intent(PlaylistDetailActivity.this, com.example.tempo.ui.MusicPlayerActivity.class);
+                    intent.putExtra("song_name", item.getTitle());
+                    intent.putExtra("song_uri", item.getUri());
+                    intent.putExtra("pos", position);
+                    intent.putExtra("songs", playList);
+                    startActivity(intent);
+                } catch (Exception ignored) {}
             }
         });
     }
