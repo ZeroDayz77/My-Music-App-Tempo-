@@ -23,6 +23,10 @@ This was a good learning experience and reinforced the reason for me as to why w
 
 - [x] It must list the name of the song along with the artist, if available and display the song's graphic and time stamp.
 
+- [x] Song/playlist searching and filtering.
+
+- [x] Selection of music folder
+
 - [ ] Add the time of each song to the song select view.
 
 - [ ] Share song option.
@@ -74,4 +78,4 @@ This was a good learning experience and reinforced the reason for me as to why w
 > _Lacking In Unit Testing._
 
 ### Last Updated:
-January 14th, 2026
+January 15th, 2026
