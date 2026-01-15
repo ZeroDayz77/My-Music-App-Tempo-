@@ -49,6 +49,7 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
 
     public static final String EXTRA_PLAYLIST = "extra_playlist"; // ArrayList<File> (Serializable)
     public static final String EXTRA_POSITION = "extra_position";
+    public static final String EXTRA_SUPPRESS_AUTOPLAY = "extra_suppress_autoplay";
     public static final String EXTRA_SEEK_POSITION = "extra_seek_position";
 
     public static final String SKIPSONGNEXT = "skip_song_next";
@@ -65,7 +66,6 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
     private final int NOTIF_ID = 1;
 
     // Indicates whether the playback service currently has an active queue/player.
-    // This is a simple process-global flag other Activities can check to know whether
     public static volatile boolean isActive = false;
     public static volatile String currentTitle = "";
     public static volatile boolean isPlaying = false;
@@ -101,6 +101,8 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
         setSessionToken(mediaSession.getSessionToken());
     }
 
+    private boolean lastPlayShouldAutoStart = true;
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null) return START_STICKY;
@@ -110,9 +112,10 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
         try {
             switch (action) {
                 case ACTION_PLAY: {
-                    // load playlist and position
+                    // load playlist and position, support suppress autoplay via extra
                     ArrayList<File> list = null;
                     Bundle extras = intent.getExtras();
+                    boolean suppress = false;
                     if (extras != null) {
                         Object obj = extras.getSerializable(EXTRA_PLAYLIST);
                         if (obj instanceof ArrayList) {
@@ -120,8 +123,11 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
                             list = (ArrayList<File>) obj;
                         }
                         queueIndex = extras.getInt(EXTRA_POSITION, 0);
+                        suppress = extras.getBoolean(EXTRA_SUPPRESS_AUTOPLAY, false);
                     }
                     if (list != null && !list.isEmpty()) queue = list;
+                    // decide whether playCurrent should auto-start
+                    lastPlayShouldAutoStart = !suppress;
                     // rebuild shuffle order when a new playlist is loaded and shuffle is enabled
                     if (shuffleEnabled.get()) buildShuffleOrder();
                     playCurrent();
@@ -169,7 +175,6 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
                 case ACTION_TOGGLE_REPEAT: {
                     boolean newRepeat = !repeatEnabled.get();
                     repeatEnabled.set(newRepeat);
-                    if (mediaPlayer != null) mediaPlayer.setLooping(repeatEnabled.get());
                     try {
                         Intent b = new Intent(ACTION_REPEAT_CHANGED).putExtra("enabled", newRepeat);
                         sendBroadcast(b);
@@ -259,19 +264,47 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
             Uri uri = Uri.parse(f.toString());
             mediaPlayer = MediaPlayer.create(getApplicationContext(), uri);
             if (mediaPlayer == null) return;
-            mediaPlayer.setLooping(repeatEnabled.get());
-            mediaPlayer.setAudioAttributes(new AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
-            mediaPlayer.setOnCompletionListener(mp -> skipToNext());
-            mediaPlayer.start();
 
-            // request audio focus
-            int result = audioManager.requestAudioFocus(afChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
-            if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-                Log.w(TAG, "Audio focus not granted");
-                // proceed anyway, but audio may be muted by the system
+            mediaPlayer.setLooping(false);
+            mediaPlayer.setAudioAttributes(new AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
+
+            mediaPlayer.setOnCompletionListener(mp -> {
+                try {
+                    // If repeat is enabled, restart the same track and update session state so UI resets to 0
+                    if (repeatEnabled.get()) {
+                        try {
+                            mediaPlayer.seekTo(0);
+                            mediaPlayer.start();
+                        } catch (IllegalStateException ise) {
+                            // If the player is in a state where seek/start isn't valid, fall back to reloading
+                            playCurrent();
+                            return;
+                        }
+                        mediaSession.setActive(true);
+                        updatePlaybackState(PlaybackStateCompat.STATE_PLAYING);
+                        startForegroundNotification();
+                        isPlaying = true;
+                    } else {
+                        // Normal behaviour: advance to next track
+                        skipToNext();
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "onCompletion error", e);
+                }
+            });
+
+            // If lastPlayShouldAutoStart is true, start playback now > otherwise prepare and remain paused
+            if (lastPlayShouldAutoStart) {
+                mediaPlayer.start();
+
+                // request audio focus
+                int result = audioManager.requestAudioFocus(afChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+                if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                    Log.w(TAG, "Audio focus not granted");
+                }
+                // register noisy receiver when actually playing
+                try { registerReceiver(noisyReceiver, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)); } catch (Exception ignored) {}
             }
-            // register noisy receiver
-            registerReceiver(noisyReceiver, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
 
             // update metadata and playback state
             String title = f.getName().replace(".mp3", "").replace(".wav", "");
@@ -281,11 +314,17 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
                     .build();
             mediaSession.setMetadata(metadata);
 
-            updatePlaybackState(PlaybackStateCompat.STATE_PLAYING);
+            // Set playback state depending on whether we started playing
+            if (lastPlayShouldAutoStart && mediaPlayer.isPlaying()) {
+                updatePlaybackState(PlaybackStateCompat.STATE_PLAYING);
+                isPlaying = true;
+            } else {
+                updatePlaybackState(PlaybackStateCompat.STATE_PAUSED);
+                isPlaying = false;
+            }
             startForegroundNotification();
             isActive = true; // Set the active flag
             currentTitle = title; // Set the current title
-            isPlaying = true; // Set the playing flag
 
         } catch (Exception e) {
             Log.e(TAG, "playCurrent error", e);
@@ -294,6 +333,12 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
 
     private void skipToNext() {
         if (queue == null || queue.isEmpty()) return;
+        // If repeat is enabled, restart the current track instead of advancing
+        if (repeatEnabled.get()) {
+            playCurrent();
+            mediaSession.setActive(true);
+            return;
+        }
         if (shuffleEnabled.get() && queue.size() > 1) {
             if (shuffleOrder == null || shuffleOrder.isEmpty()) buildShuffleOrder();
             // advance to next position then play it
@@ -308,6 +353,12 @@ public class MediaPlaybackService extends MediaBrowserServiceCompat {
 
     private void skipToPrevious() {
         if (queue == null || queue.isEmpty()) return;
+        // If repeat is enabled, restart the current track instead of going to previous
+        if (repeatEnabled.get()) {
+            playCurrent();
+            mediaSession.setActive(true);
+            return;
+        }
         if (shuffleEnabled.get() && queue.size() > 1) {
             if (shuffleOrder == null || shuffleOrder.isEmpty()) buildShuffleOrder();
             shufflePos = (shufflePos - 1 + shuffleOrder.size()) % shuffleOrder.size();

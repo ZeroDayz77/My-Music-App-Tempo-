@@ -4,18 +4,24 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.net.Uri;
+
+import androidx.documentfile.provider.DocumentFile;
+
+import java.io.File;
+import java.util.ArrayList;
 
 import com.example.tempo.data.Playlist;
 import com.example.tempo.data.PlaylistItem;
 import com.example.tempo.db.TempoSongPlaylistDatabase;
 
-import java.util.ArrayList;
-
 public class PlaylistRepository {
     private final TempoSongPlaylistDatabase dbHelper;
+    private final Context context;
 
     public PlaylistRepository(Context context) {
         dbHelper = new TempoSongPlaylistDatabase(context);
+        this.context = context;
     }
 
     public long createPlaylist(String name) {
@@ -75,17 +81,50 @@ public class PlaylistRepository {
 
     public ArrayList<PlaylistItem> getItemsForPlaylist(int playlistId) {
         ArrayList<PlaylistItem> list = new ArrayList<>();
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
+        SQLiteDatabase db = dbHelper.getWritableDatabase();
         Cursor cursor = db.query(TempoSongPlaylistDatabase.TABLE_PLAYLIST_ITEMS, null, TempoSongPlaylistDatabase.COLUMN_ITEM_PLAYLIST_ID + "=?", new String[]{String.valueOf(playlistId)}, null, null, null);
         if (cursor != null) {
             while (cursor.moveToNext()) {
+                int itemId = cursor.getInt(cursor.getColumnIndexOrThrow(TempoSongPlaylistDatabase.COLUMN_ITEM_ID));
+                String songId = cursor.getString(cursor.getColumnIndexOrThrow(TempoSongPlaylistDatabase.COLUMN_ITEM_SONG_ID));
+                String title = cursor.getString(cursor.getColumnIndexOrThrow(TempoSongPlaylistDatabase.COLUMN_ITEM_TITLE));
+                String uri = cursor.getString(cursor.getColumnIndexOrThrow(TempoSongPlaylistDatabase.COLUMN_ITEM_URI));
+                long duration = cursor.getLong(cursor.getColumnIndexOrThrow(TempoSongPlaylistDatabase.COLUMN_ITEM_DURATION));
+
+                boolean exists = false;
+                try {
+                    String toCheck = (uri != null && !uri.isEmpty()) ? uri : songId;
+                    if (toCheck != null && !toCheck.isEmpty()) {
+                        if (toCheck.startsWith("content://")) {
+                            try {
+                                Uri u = Uri.parse(toCheck);
+                                DocumentFile df = DocumentFile.fromSingleUri(context, u);
+                                if (df != null && df.exists() && df.isFile()) exists = true;
+                            } catch (Exception ignored) {}
+                        } else {
+                            try {
+                                File f = new File(toCheck);
+                                if (f.exists()) exists = true;
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                } catch (Exception ignored) {}
+
+                if (!exists) {
+                    // prune missing item silently
+                    try {
+                        db.delete(TempoSongPlaylistDatabase.TABLE_PLAYLIST_ITEMS, TempoSongPlaylistDatabase.COLUMN_ITEM_ID + "=?", new String[]{String.valueOf(itemId)});
+                    } catch (Exception ignored) {}
+                    continue; // skip adding to returned list
+                }
+
                 PlaylistItem item = new PlaylistItem();
-                item.setId(cursor.getInt(cursor.getColumnIndexOrThrow(TempoSongPlaylistDatabase.COLUMN_ITEM_ID)));
+                item.setId(itemId);
                 item.setPlaylistId(cursor.getInt(cursor.getColumnIndexOrThrow(TempoSongPlaylistDatabase.COLUMN_ITEM_PLAYLIST_ID)));
-                item.setSongId(cursor.getString(cursor.getColumnIndexOrThrow(TempoSongPlaylistDatabase.COLUMN_ITEM_SONG_ID)));
-                item.setTitle(cursor.getString(cursor.getColumnIndexOrThrow(TempoSongPlaylistDatabase.COLUMN_ITEM_TITLE)));
-                item.setUri(cursor.getString(cursor.getColumnIndexOrThrow(TempoSongPlaylistDatabase.COLUMN_ITEM_URI)));
-                item.setDuration(cursor.getLong(cursor.getColumnIndexOrThrow(TempoSongPlaylistDatabase.COLUMN_ITEM_DURATION)));
+                item.setSongId(songId);
+                item.setTitle(title);
+                item.setUri(uri);
+                item.setDuration(duration);
                 list.add(item);
             }
             cursor.close();

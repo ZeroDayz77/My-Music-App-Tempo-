@@ -6,6 +6,7 @@ import android.view.MenuItem;
 import android.util.Log;
 import android.view.ViewGroup;
 import android.widget.RelativeLayout;
+import android.util.DisplayMetrics;
 
 import androidx.annotation.IdRes;
 import androidx.annotation.Nullable;
@@ -13,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.AdSize;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
@@ -92,6 +94,12 @@ public abstract class BaseBottomNavActivity extends AppCompatActivity {
             if (adView != null) {
                 // Load ad only once per activity instance
                 if (!adLoaded) {
+                    // Use adaptive banner sizing so the ad fills the available width
+                    try {
+                        AdSize adSize = getAdSize();
+                        if (adSize != null) adView.setAdSize(adSize);
+                    } catch (Exception ignored) {}
+
                     AdRequest adRequest = new AdRequest.Builder().build();
                     try { adView.loadAd(adRequest); } catch (Exception e) { Log.w("BaseBottomNavActivity", "adView.loadAd failed", e); }
                     adLoaded = true;
@@ -141,5 +149,21 @@ public abstract class BaseBottomNavActivity extends AppCompatActivity {
                 adView = null;
             }
         } catch (Exception ignored) {}
+    }
+
+    // Compute adaptive banner AdSize based on current screen width
+    private AdSize getAdSize() {
+        try {
+            DisplayMetrics outMetrics = new DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getMetrics(outMetrics);
+            float widthPixels = outMetrics.widthPixels;
+            float density = outMetrics.density;
+            int adWidth = (int) (widthPixels / density);
+            // Request an adaptive banner of the current orientation that matches the width
+            return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(this, adWidth);
+        } catch (Exception e) {
+            Log.w("BaseBottomNavActivity", "Failed to compute adaptive ad size", e);
+            return AdSize.BANNER;
+        }
     }
 }

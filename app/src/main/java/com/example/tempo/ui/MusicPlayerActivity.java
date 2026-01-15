@@ -174,6 +174,12 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
         String altSongName = i.getStringExtra("song_name");
         String altSongUri = i.getStringExtra("song_uri");
         activityOpenedFromLyrics = i.getBooleanExtra("from_lyrics", false);
+        // If the caller requested suppress_autoplay (MainActivity passes this when it starts the service and activity),
+        // mark pausedByActivity so the ad-dismiss flow will resume playback later.
+        try {
+            boolean suppress = i.getBooleanExtra("suppress_autoplay", false);
+            if (suppress) pausedByActivity = true;
+        } catch (Exception ignored) {}
 
         if (bundle != null) {
             // prefer explicit song_name (from playlist) over songname
@@ -386,17 +392,13 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
         // Disable playback controls until interstitial is handled (shown or failed)
         setControlsEnabled(false);
 
-        // Pause playback immediately if the service is currently playing; we'll resume after the ad.
+        // Record whether service was playing when we opened the activity so we can make decisions later.
         try {
             wasPlayingBefore = com.example.tempo.Services.MediaPlaybackService.isPlaying;
-            if (wasPlayingBefore) {
-                Intent pauseIntent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PAUSE);
-                try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), pauseIntent); else startService(pauseIntent);
-                    pausedByActivity = true;
-                } catch (Exception ignored) {}
-            }
         } catch (Exception ignored) {}
+
+        // Note: do NOT pause playback here. We will pause right before showing the interstitial (pausePlaybackForAd)
+        // or in onConnected() to ensure the MediaController is available and avoid race conditions with the service.
 
         // Start loading interstitial immediately so it can be shown as soon as possible.
         try {
@@ -462,7 +464,10 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
 
                             @Override
                             public void onAdShowedFullScreenContent() {
-                                // no-op
+                                // Pause playback only once the ad has actually been shown to avoid racing with ad failures
+                                try {
+                                    pausePlaybackForAd();
+                                } catch (Exception ignored) {}
                             }
                         });
                         // If activity is resumed, show immediately; otherwise onResume() will show it.
@@ -706,8 +711,6 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
     private void tryShowInterstitialIfReady() {
         try {
             if (mInterstitialAd != null && !interstitialShown && !interstitialShowing && !isFinishing() && !isDestroyed()) {
-                // Ensure playback is paused before showing the ad
-                pausePlaybackForAd();
                 interstitialShowing = true;
                 mInterstitialAd.show(MusicPlayerActivity.this);
             }
@@ -796,12 +799,9 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
                         mediaController = new MediaControllerCompat(MusicPlayerActivity.this, mediaBrowser.getSessionToken());
                         MediaControllerCompat.setMediaController(MusicPlayerActivity.this, mediaController);
 
-                        // If an interstitial is pending (loaded but not yet dismissed), make sure playback is paused immediately
-                        try {
-                            if (!interstitialShown && !adFailedToLoad) {
-                                pausePlaybackForAd();
-                            }
-                        } catch (Exception ignored) {}
+                        // Do NOT pause playback here. We pause only once the interstitial actually shows
+                        // (handled in FullScreenContentCallback.onAdShowedFullScreenContent) to avoid races
+                        // where the activity pauses playback but the ad fails to appear
 
                         // Update UI with current metadata
                         MediaMetadataCompat metadata = mediaController.getMetadata();

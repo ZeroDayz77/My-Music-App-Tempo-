@@ -2,7 +2,12 @@ package com.example.tempo.ui;
 
 import android.content.ComponentName;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.DocumentsContract;
+import android.os.Environment;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
@@ -16,13 +21,13 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
 import com.example.tempo.data.PlaylistItem;
 import com.example.tempo.repo.PlaylistRepository;
 
 import java.util.ArrayList;
+import java.io.File;
 
 import android.support.v4.media.MediaBrowserCompat;
 import android.support.v4.media.session.MediaControllerCompat;
@@ -40,6 +45,9 @@ public class PlaylistDetailActivity extends BaseBottomNavActivity {
     private ArrayList<PlaylistItem> items;
     private ListView listView;
     private PlaylistItemAdapter playlistItemAdapter;
+    private boolean sortAscending = true;
+    private static final int REQUEST_CODE_PICK_FOLDER = 1001;
+    private static final String PREFS_MUSIC_FOLDER = "prefs_music_folder";
 
     MediaBrowserCompat mediaBrowser;
     private boolean skipShowAnimation = false;
@@ -60,6 +68,13 @@ public class PlaylistDetailActivity extends BaseBottomNavActivity {
             getSupportActionBar().setTitle(playlistName);
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
+
+        try {
+            int uiMode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+            if (uiMode == Configuration.UI_MODE_NIGHT_YES) {
+                toolbar.setPopupTheme(androidx.appcompat.R.style.ThemeOverlay_AppCompat_Dark);
+            }
+        } catch (Exception ignored) {}
 
         listView = findViewById(com.example.tempo.R.id.listViewPlaylistItems);
 
@@ -164,19 +179,51 @@ public class PlaylistDetailActivity extends BaseBottomNavActivity {
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                // Play song from playlist using MusicPlayerActivity
-                PlaylistItem item = items.get(position);
-                Intent intent = new Intent(PlaylistDetailActivity.this, com.example.tempo.ui.MusicPlayerActivity.class);
-                // pass the uri and title
-                intent.putExtra("song_uri", item.getUri());
-                intent.putExtra("song_name", item.getTitle());
-                startActivity(intent);
+                try {
+                    ArrayList<PlaylistItem> visible = playlistItemAdapter.getFiltered();
+                    if (visible == null || visible.isEmpty()) return;
+                    PlaylistItem item = visible.get(position);
+
+                    ArrayList<File> playList = new ArrayList<>();
+                    for (PlaylistItem it : visible) {
+                        try { playList.add(new File(it.getUri())); } catch (Exception ignored) {}
+                    }
+
+                    // Start playback with the playlist context
+                    Intent serviceIntent = new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class)
+                            .setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PLAY)
+                            .putExtra(com.example.tempo.Services.MediaPlaybackService.EXTRA_PLAYLIST, playList)
+                            .putExtra(com.example.tempo.Services.MediaPlaybackService.EXTRA_POSITION, position);
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        androidx.core.content.ContextCompat.startForegroundService(getApplicationContext(), serviceIntent);
+                    } else {
+                        startService(serviceIntent);
+                    }
+
+                    // Open player UI with same playlist and position
+                    Intent intent = new Intent(PlaylistDetailActivity.this, com.example.tempo.ui.MusicPlayerActivity.class);
+                    intent.putExtra("song_name", item.getTitle());
+                    intent.putExtra("song_uri", item.getUri());
+                    intent.putExtra("pos", position);
+                    intent.putExtra("songs", playList);
+                    startActivity(intent);
+                } catch (Exception ignored) {}
             }
         });
     }
 
     private void loadItems() {
         items = repository.getItemsForPlaylist(playlistId);
+        try {
+            java.util.Collections.sort(items, new java.util.Comparator<com.example.tempo.data.PlaylistItem>() {
+                @Override
+                public int compare(com.example.tempo.data.PlaylistItem a, com.example.tempo.data.PlaylistItem b) {
+                    if (a == null || a.getTitle() == null) return -1;
+                    if (b == null || b.getTitle() == null) return 1;
+                    return sortAscending ? a.getTitle().compareToIgnoreCase(b.getTitle()) : b.getTitle().compareToIgnoreCase(a.getTitle());
+                }
+            });
+        } catch (Exception ignored) {}
         // Use custom adapter to show each item with song_list_names layout
         playlistItemAdapter = new PlaylistItemAdapter(items);
         listView.setAdapter(playlistItemAdapter);
@@ -303,6 +350,16 @@ public class PlaylistDetailActivity extends BaseBottomNavActivity {
             finish();
             return true;
         }
+        if (item.getItemId() == com.example.tempo.R.id.settings) {
+            promptForMusicFolder();
+            return true;
+        }
+        if (item.getItemId() == com.example.tempo.R.id.sort_button) {
+            sortAscending = !sortAscending;
+            item.setTitle(sortAscending ? "Sort A→Z" : "Sort Z→A");
+            loadItems();
+            return true;
+        }
         return super.onOptionsItemSelected(item);
     }
 
@@ -330,6 +387,49 @@ public class PlaylistDetailActivity extends BaseBottomNavActivity {
             }
         });
         return true;
+    }
+
+    private void promptForMusicFolder() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(intent, REQUEST_CODE_PICK_FOLDER);
+        } catch (Exception ignored) {}
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_PICK_FOLDER) {
+            if (data == null) return;
+            Uri treeUri = data.getData();
+            if (treeUri == null) return;
+            try { getContentResolver().takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
+            String resolved = resolveTreeUriToPath(treeUri);
+            SharedPreferences prefs = getSharedPreferences("tempo_prefs", MODE_PRIVATE);
+            if (resolved != null) prefs.edit().putString(PREFS_MUSIC_FOLDER, resolved).apply(); else prefs.edit().putString(PREFS_MUSIC_FOLDER, treeUri.toString()).apply();
+            // Reload items in case path mapping affects displayed content
+            loadItems();
+        }
+    }
+
+    private String resolveTreeUriToPath(Uri treeUri) {
+        try {
+            String docId = DocumentsContract.getTreeDocumentId(treeUri);
+            String[] parts = docId.split(":");
+            String type = parts.length > 0 ? parts[0] : null;
+            String relPath = parts.length > 1 ? parts[1] : "";
+            if (type != null && (type.equalsIgnoreCase("primary") || type.equalsIgnoreCase("0"))) {
+                String base = Environment.getExternalStorageDirectory().getAbsolutePath();
+                if (relPath != null && !relPath.isEmpty()) return base + "/" + relPath;
+                return base;
+            } else if (type != null) {
+                String candidate = "/storage/" + type + (relPath != null && !relPath.isEmpty() ? "/" + relPath : "");
+                java.io.File f = new java.io.File(candidate);
+                if (f.exists()) return candidate;
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     @Override

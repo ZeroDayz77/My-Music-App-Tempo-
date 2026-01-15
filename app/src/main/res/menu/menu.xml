@@ -15,6 +15,12 @@
 
     </item>
 
+    <!-- Activities will update title to reflect A→Z or Z→A -->
+    <item
+        android:id="@+id/sort_button"
+        android:title="Sort A→Z"
+        android:icon="@drawable/ic_filter_icon"
+        app:showAsAction="always" />
 
     <item
         android:id="@+id/settings_button"
@@ -25,7 +31,7 @@
         <menu>
             <item
                 android:id="@+id/settings"
-                android:title="Settings"
+                android:title="Choose Music Folder"
                 app:showAsAction="never">
             </item>
 

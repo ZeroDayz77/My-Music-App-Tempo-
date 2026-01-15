@@ -3,7 +3,12 @@ package com.example.tempo.ui;
 import android.content.ComponentName;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.res.Configuration;
+import android.content.SharedPreferences;
+import android.net.Uri;
+import android.provider.DocumentsContract;
 import android.os.Bundle;
+import android.os.Environment;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.animation.AccelerateDecelerateInterpolator;
@@ -34,6 +39,9 @@ import android.support.v4.media.session.MediaControllerCompat;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 
+import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.AdListener;
+
 public class PlaylistsActivity extends BaseBottomNavActivity {
     private Toolbar toolbar;
 
@@ -44,6 +52,10 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
 
     private ArrayList<Playlist> playlists;
     private PlaylistAdapter playlistAdapter;
+    // Sort state: true = ascending (A->Z), false = descending (Z->A)
+    private boolean sortAscending = true;
+    private static final int REQUEST_CODE_PICK_FOLDER = 1001;
+    private static final String PREFS_MUSIC_FOLDER = "prefs_music_folder";
 
     MediaBrowserCompat mediaBrowser;
     private boolean skipShowAnimation = false;
@@ -59,6 +71,13 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
         toolbar = findViewById(com.example.tempo.R.id.tempoToolBar);
         setSupportActionBar(toolbar);
         Objects.requireNonNull(getSupportActionBar()).setTitle("Playlists");
+
+        try {
+            int uiMode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+            if (uiMode == Configuration.UI_MODE_NIGHT_YES) {
+                toolbar.setPopupTheme(androidx.appcompat.R.style.ThemeOverlay_AppCompat_Dark);
+            }
+        } catch (Exception ignored) {}
 
         listView = findViewById(com.example.tempo.R.id.listView);
         addNewPlaylistButton = findViewById(com.example.tempo.R.id.NewPlaylistButton);
@@ -224,10 +243,49 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
         nowPrev.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PREV)));
         nowNext.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_NEXT)));
         nowPlayPause.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE)));
+
+        // listen for ad load and adjust FAB position when ad/mini-player appear
+        AdView adView = findViewById(com.example.tempo.R.id.adView);
+        if (adView != null) {
+            try {
+                adView.setAdListener(new AdListener() {
+                    @Override
+                    public void onAdLoaded() {
+                        // Ensure layout measurements are available then adjust
+                        addNewPlaylistButton.post(() -> adjustFabForAdAndMiniBar());
+                    }
+
+                    @Override
+                    public void onAdFailedToLoad(@androidx.annotation.NonNull com.google.android.gms.ads.LoadAdError adError) {
+                        // On failure, recalc in case ad was hidden/changed
+                        addNewPlaylistButton.post(() -> adjustFabForAdAndMiniBar());
+                    }
+
+                    @Override
+                    public void onAdClosed() {
+                        addNewPlaylistButton.post(() -> adjustFabForAdAndMiniBar());
+                    }
+                });
+            } catch (Exception ignored) {}
+        }
+
+        // Initial adjustment (in case views are already present)
+        addNewPlaylistButton.post(this::adjustFabForAdAndMiniBar);
     }
 
     private void loadPlaylists() {
         playlists = repository.getAllPlaylists();
+        // Default: sort alphabetically by playlist name
+        try {
+            java.util.Collections.sort(playlists, new java.util.Comparator<com.example.tempo.data.Playlist>() {
+                @Override
+                public int compare(com.example.tempo.data.Playlist a, com.example.tempo.data.Playlist b) {
+                    if (a == null || a.getName() == null) return -1;
+                    if (b == null || b.getName() == null) return 1;
+                    return sortAscending ? a.getName().compareToIgnoreCase(b.getName()) : b.getName().compareToIgnoreCase(a.getName());
+                }
+            });
+        } catch (Exception ignored) {}
         playlistAdapter = new PlaylistAdapter(this, playlists);
         listView.setAdapter(playlistAdapter);
     }
@@ -255,6 +313,68 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
         } catch (Exception ignored) {}
     }
 
+    @Override
+    public boolean onCreateOptionsMenu(android.view.Menu menu) {
+        getMenuInflater().inflate(com.example.tempo.R.menu.menu, menu);
+        // Setup search view behavior (menu already has search_button)
+        android.view.MenuItem searchItem = menu.findItem(com.example.tempo.R.id.search_button);
+        androidx.appcompat.widget.SearchView searchView = (androidx.appcompat.widget.SearchView) searchItem.getActionView();
+        if (searchView != null) {
+            searchView.setOnQueryTextListener(new androidx.appcompat.widget.SearchView.OnQueryTextListener() {
+                @Override
+                public boolean onQueryTextSubmit(String query) {
+                    // filter by playlist name
+                    try {
+                        ArrayList<Playlist> filtered = new ArrayList<>();
+                        for (Playlist p : playlists) if (p.getName() != null && p.getName().toLowerCase().contains(query.toLowerCase())) filtered.add(p);
+                        playlistAdapter = new PlaylistAdapter(PlaylistsActivity.this, filtered);
+                        listView.setAdapter(playlistAdapter);
+                    } catch (Exception ignored) {}
+                    return false;
+                }
+
+                @Override
+                public boolean onQueryTextChange(String newText) {
+                    try {
+                        if (newText == null || newText.isEmpty()) {
+                            playlistAdapter = new PlaylistAdapter(PlaylistsActivity.this, playlists);
+                            listView.setAdapter(playlistAdapter);
+                        } else {
+                            ArrayList<Playlist> filtered = new ArrayList<>();
+                            for (Playlist p : playlists) if (p.getName() != null && p.getName().toLowerCase().contains(newText.toLowerCase())) filtered.add(p);
+                            playlistAdapter = new PlaylistAdapter(PlaylistsActivity.this, filtered);
+                            listView.setAdapter(playlistAdapter);
+                        }
+                    } catch (Exception ignored) {}
+                    return false;
+                }
+            });
+        }
+
+        // Sort button action
+        android.view.MenuItem sortItem = menu.findItem(com.example.tempo.R.id.sort_button);
+        if (sortItem != null) {
+            sortItem.setOnMenuItemClickListener(item -> {
+                sortAscending = !sortAscending;
+                sortItem.setTitle(sortAscending ? "Sort A→Z" : "Sort Z→A");
+                loadPlaylists();
+                return true;
+            });
+            sortItem.setTitle(sortAscending ? "Sort A→Z" : "Sort Z→A");
+        }
+
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull android.view.MenuItem item) {
+        if (item.getItemId() == com.example.tempo.R.id.settings) {
+            promptForMusicFolder();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
     private final MediaControllerCompat.Callback controllerCallback = new MediaControllerCompat.Callback() {
         @Override
         public void onMetadataChanged(MediaMetadataCompat metadata) {
@@ -273,6 +393,8 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
         ImageButton playBtn = findViewById(com.example.tempo.R.id.nowPlayPause);
         if (meta == null || state == null || include == null || title == null || playBtn == null) {
             if (include != null) include.setVisibility(View.GONE);
+            // ensure FAB is repositioned when mini bar hides
+            adjustFabForAdAndMiniBar();
             return;
         }
 
@@ -286,13 +408,43 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
             if (skipShowAnimation) {
                 include.setVisibility(View.VISIBLE);
                 skipShowAnimation = false;
+                // adjust FAB now that mini bar is visible
+                adjustFabForAdAndMiniBar();
             } else {
                 include.setVisibility(View.VISIBLE);
                 include.setTranslationY(include.getHeight());
                 include.setAlpha(0f);
-                include.animate().translationY(0).alpha(1f).setDuration(250).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+                include.animate().translationY(0).alpha(1f).setDuration(250).setInterpolator(new AccelerateDecelerateInterpolator()).withEndAction(() -> adjustFabForAdAndMiniBar()).start();
             }
+        } else {
+            // already visible — ensure FAB accounts for current state
+            adjustFabForAdAndMiniBar();
         }
+    }
+
+    // Compute ad + mini-player heights and translate FAB upward so it stays above them
+    private void adjustFabForAdAndMiniBar() {
+        if (addNewPlaylistButton == null) return;
+        try {
+            View ad = findViewById(com.example.tempo.R.id.adView);
+            View mini = findViewById(com.example.tempo.R.id.nowPlayingInclude);
+
+            int extraPx = 0;
+            if (ad != null && ad.getVisibility() == View.VISIBLE) {
+                int h = ad.getHeight();
+                if (h <= 0) h = ad.getMeasuredHeight();
+                extraPx += Math.max(0, h);
+            }
+            if (mini != null && mini.getVisibility() == View.VISIBLE) {
+                int mh = mini.getHeight();
+                if (mh <= 0) mh = mini.getMeasuredHeight();
+                extraPx += Math.max(0, mh);
+            }
+
+            // If there is an extra offset, translate FAB up by that many pixels. Otherwise reset translation.
+            float target = extraPx > 0 ? -extraPx : 0f;
+            addNewPlaylistButton.animate().translationY(target).setDuration(200).start();
+        } catch (Exception ignored) {}
     }
 
     @Override
@@ -320,5 +472,50 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
     @Override
     protected int getNavigationItemId() {
         return com.example.tempo.R.id.playlistButton;
+    }
+
+    private void promptForMusicFolder() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(intent, REQUEST_CODE_PICK_FOLDER);
+        } catch (Exception e) {
+            // ignore if not available
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_PICK_FOLDER) {
+            if (data == null) return;
+            Uri treeUri = data.getData();
+            if (treeUri == null) return;
+            try { getContentResolver().takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
+            String resolved = resolveTreeUriToPath(treeUri);
+            SharedPreferences prefs = getSharedPreferences("tempo_prefs", MODE_PRIVATE);
+            if (resolved != null) prefs.edit().putString(PREFS_MUSIC_FOLDER, resolved).apply(); else prefs.edit().putString(PREFS_MUSIC_FOLDER, treeUri.toString()).apply();
+            // No direct playlist content refresh needed, but reload list just in case
+            loadPlaylists();
+        }
+    }
+
+    private String resolveTreeUriToPath(Uri treeUri) {
+        try {
+            String docId = DocumentsContract.getTreeDocumentId(treeUri);
+            String[] parts = docId.split(":");
+            String type = parts.length > 0 ? parts[0] : null;
+            String relPath = parts.length > 1 ? parts[1] : "";
+            if (type != null && (type.equalsIgnoreCase("primary") || type.equalsIgnoreCase("0"))) {
+                String base = Environment.getExternalStorageDirectory().getAbsolutePath();
+                if (relPath != null && !relPath.isEmpty()) return base + "/" + relPath;
+                return base;
+            } else if (type != null) {
+                String candidate = "/storage/" + type + (relPath != null && !relPath.isEmpty() ? "/" + relPath : "");
+                java.io.File f = new java.io.File(candidate);
+                if (f.exists()) return candidate;
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 }
