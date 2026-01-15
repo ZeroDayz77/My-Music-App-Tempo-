@@ -6,10 +6,14 @@ import android.app.NotificationManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.media.MediaPlayer;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.DocumentsContract;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -32,6 +36,7 @@ import androidx.appcompat.widget.SearchView;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.documentfile.provider.DocumentFile;
 
 import com.example.tempo.Services.OnClearRecentService;
 import com.example.tempo.Services.MediaPlaybackService;
@@ -76,6 +81,8 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
     private PlaylistRepository playlistRepository;
 
     private static final int REQUEST_CODE_POST_NOTIFICATIONS = 9001;
+    private static final int REQUEST_CODE_PICK_FOLDER = 1001;
+    private static final String PREFS_MUSIC_FOLDER = "prefs_music_folder";
 
     MediaBrowserCompat mediaBrowser; // for mini-bar live updates
     private boolean skipShowAnimation = false;
@@ -85,6 +92,7 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
 
     // Sort state for main song list
     private boolean songsSortAscending = true;
+    private androidx.appcompat.app.AlertDialog folderChoiceDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -119,6 +127,14 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
         setSupportActionBar(toolbar);
         Objects.requireNonNull(getSupportActionBar()).setTitle("Tempo");
 
+        // Ensure overflow menu text/icons are white in dark theme
+        try {
+            int uiMode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+            if (uiMode == Configuration.UI_MODE_NIGHT_YES) {
+                toolbar.setPopupTheme(androidx.appcompat.R.style.ThemeOverlay_AppCompat_Dark);
+            }
+        } catch (Exception ignored) {}
+
         searchView = findViewById(com.example.tempo.R.id.search_button);
         listView = findViewById(com.example.tempo.R.id.listViewSong);
 
@@ -129,6 +145,9 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
 
         isSearchActive = false;
         runtimePermission();
+
+        // On first run show explanatory dialog offering default or choose folder.
+        checkAndShowFolderDialog();
 
         BottomNavigationView bottomNavigationView = findViewById(com.example.tempo.R.id.bottomToolBar);
 
@@ -413,9 +432,40 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
 
     void displaySongs() {
 
-        String extFilePath = "/storage/emulated/0/Music";
-        File myFiles = new File(extFilePath);
-        mySongs = findSong(myFiles);
+        // Determine which folder to scan: use stored preference if available
+        SharedPreferences prefs = getSharedPreferences("tempo_prefs", MODE_PRIVATE);
+        String stored = prefs.getString(PREFS_MUSIC_FOLDER, null);
+
+        mySongs = new ArrayList<>();
+        if (stored == null || stored.isEmpty()) {
+            // default to common Music folder
+            String extFilePath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/Music";
+            File myFiles = new File(extFilePath);
+            mySongs = findSong(myFiles);
+        } else {
+            try {
+                if (stored.startsWith("/")) {
+                    File myFiles = new File(stored);
+                    mySongs = findSong(myFiles);
+                } else if (stored.startsWith("content://")) {
+                    // persisted tree Uri string — traverse using DocumentFile
+                    Uri tree = Uri.parse(stored);
+                    DocumentFile doc = DocumentFile.fromTreeUri(this, tree);
+                    if (doc != null && doc.exists() && doc.isDirectory()) {
+                        traverseDocumentFile(doc, mySongs);
+                    }
+                } else {
+                    // fallback: try as path
+                    File myFiles = new File(stored);
+                    mySongs = findSong(myFiles);
+                }
+            } catch (Exception e) {
+                // fallback to default
+                String extFilePath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/Music";
+                File myFiles = new File(extFilePath);
+                mySongs = findSong(myFiles);
+            }
+        }
 
         Collections.sort(mySongs, new java.util.Comparator<java.io.File>() {
             @Override
@@ -468,6 +518,26 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
             showAddToPlaylistDialog(selectedFile);
             return true;
         });
+    }
+
+    // Recursively traverse DocumentFile tree and add mp3/wav files to outList
+    private void traverseDocumentFile(DocumentFile dir, ArrayList<File> outList) {
+        if (dir == null || !dir.isDirectory()) return;
+        for (DocumentFile f : dir.listFiles()) {
+            if (f.isDirectory()) {
+                traverseDocumentFile(f, outList);
+            } else if (f.isFile()) {
+                String name = f.getName();
+                if (name == null) continue;
+                if (name.endsWith(".mp3") || name.endsWith(".wav")) {
+                    try {
+                        // We cannot convert DocumentFile to java.io.File; store a placeholder file with URI string
+                        // Use File with path equal to content URI string so existing code can reference it as a unique id
+                        outList.add(new File(f.getUri().toString()));
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
     }
 
     private void showAddToPlaylistDialog(File file) {
@@ -645,6 +715,9 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
     @Override
     protected void onResume() {
         super.onResume();
+        // Re-check folder choice on resume (dialog should appear until user picks an option)
+        checkAndShowFolderDialog();
+
         // update now-playing bar
         TextView nowPlayingTitle = findViewById(com.example.tempo.R.id.nowPlayingTitle);
         View nowPlayingClickable = findViewById(com.example.tempo.R.id.nowPlayingClickable);
@@ -717,6 +790,124 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
                 include.setAlpha(0f);
                 include.animate().translationY(0).alpha(1f).setDuration(250).setInterpolator(new AccelerateDecelerateInterpolator()).start();
             }
+        }
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == com.example.tempo.R.id.settings) {
+            // open folder picker to change music folder
+            promptForMusicFolder();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void promptForMusicFolder() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(intent, REQUEST_CODE_PICK_FOLDER);
+        } catch (Exception e) {
+            Log.w("MainActivity", "Folder picker not available", e);
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_PICK_FOLDER) {
+            if (data == null) return;
+            Uri treeUri = data.getData();
+            if (treeUri == null) return;
+            try {
+                // Request read permission persistently for the picked tree
+                getContentResolver().takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (Exception ignored) {}
+
+            // Try to resolve to a filesystem path for primary storage
+            String resolved = resolveTreeUriToPath(treeUri);
+            if (resolved != null) {
+                SharedPreferences prefs = getSharedPreferences("tempo_prefs", MODE_PRIVATE);
+                prefs.edit().putString(PREFS_MUSIC_FOLDER, resolved).apply();
+                // refresh display
+                displaySongs();
+                if (folderChoiceDialog != null && folderChoiceDialog.isShowing()) folderChoiceDialog.dismiss();
+            } else {
+                // Could not resolve; notify user and still store the uri string as fallback
+                SharedPreferences prefs = getSharedPreferences("tempo_prefs", MODE_PRIVATE);
+                prefs.edit().putString(PREFS_MUSIC_FOLDER, treeUri.toString()).apply();
+                displaySongs();
+                if (folderChoiceDialog != null && folderChoiceDialog.isShowing()) folderChoiceDialog.dismiss();
+            }
+        }
+    }
+
+    // Attempt to resolve a tree Uri to a real filesystem path for primary storage trees
+    private String resolveTreeUriToPath(Uri treeUri) {
+        try {
+            String docId = DocumentsContract.getTreeDocumentId(treeUri);
+            String[] parts = docId.split(":");
+            String type = parts.length > 0 ? parts[0] : null;
+            String relPath = parts.length > 1 ? parts[1] : "";
+            if (type != null && (type.equalsIgnoreCase("primary") || type.equalsIgnoreCase("0"))) {
+                String base = Environment.getExternalStorageDirectory().getAbsolutePath();
+                if (relPath != null && !relPath.isEmpty()) return base + "/" + relPath;
+                return base;
+            } else if (type != null) {
+                // try /storage/<type>/<relPath>
+                String candidate = "/storage/" + type + (relPath != null && !relPath.isEmpty() ? "/" + relPath : "");
+                java.io.File f = new java.io.File(candidate);
+                if (f.exists()) return candidate;
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    // Check preferences and show the explanatory first-run dialog if no folder chosen yet
+    private void checkAndShowFolderDialog() {
+        try {
+            SharedPreferences prefs = getSharedPreferences("tempo_prefs", MODE_PRIVATE);
+            String stored = prefs.getString(PREFS_MUSIC_FOLDER, null);
+            if (stored == null || stored.isEmpty()) {
+                showFolderChoiceDialog();
+            } else {
+                // nothing to do
+                if (folderChoiceDialog != null && folderChoiceDialog.isShowing()) {
+                    folderChoiceDialog.dismiss();
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void showFolderChoiceDialog() {
+        if (folderChoiceDialog != null && folderChoiceDialog.isShowing()) return;
+        try {
+            androidx.appcompat.app.AlertDialog.Builder b = new androidx.appcompat.app.AlertDialog.Builder(this);
+            b.setTitle("Choose music folder");
+            b.setMessage("Tempo needs to know where your music is stored. You can use the default Music folder or pick a custom folder.");
+            b.setCancelable(false);
+            b.setPositiveButton("Use default", (dialog, which) -> {
+                // store default Music folder path
+                String defaultPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/Music";
+                SharedPreferences prefs = getSharedPreferences("tempo_prefs", MODE_PRIVATE);
+                prefs.edit().putString(PREFS_MUSIC_FOLDER, defaultPath).apply();
+                // refresh songs
+                displaySongs();
+                try { dialog.dismiss(); } catch (Exception ignored) {}
+            });
+            b.setNegativeButton("Choose folder", (dialog, which) -> {
+                try { dialog.dismiss(); } catch (Exception ignored) {}
+                // open the system folder picker
+                promptForMusicFolder();
+            });
+            folderChoiceDialog = b.create();
+            folderChoiceDialog.setCanceledOnTouchOutside(false);
+            folderChoiceDialog.show();
+        } catch (Exception e) {
+            Log.w("MainActivity", "Unable to show folder choice dialog", e);
+            // fallback to direct picker
+            promptForMusicFolder();
         }
     }
 }

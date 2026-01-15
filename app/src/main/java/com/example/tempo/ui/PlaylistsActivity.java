@@ -3,7 +3,12 @@ package com.example.tempo.ui;
 import android.content.ComponentName;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.res.Configuration;
+import android.content.SharedPreferences;
+import android.net.Uri;
+import android.provider.DocumentsContract;
 import android.os.Bundle;
+import android.os.Environment;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.animation.AccelerateDecelerateInterpolator;
@@ -49,6 +54,8 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
     private PlaylistAdapter playlistAdapter;
     // Sort state: true = ascending (A->Z), false = descending (Z->A)
     private boolean sortAscending = true;
+    private static final int REQUEST_CODE_PICK_FOLDER = 1001;
+    private static final String PREFS_MUSIC_FOLDER = "prefs_music_folder";
 
     MediaBrowserCompat mediaBrowser;
     private boolean skipShowAnimation = false;
@@ -64,6 +71,13 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
         toolbar = findViewById(com.example.tempo.R.id.tempoToolBar);
         setSupportActionBar(toolbar);
         Objects.requireNonNull(getSupportActionBar()).setTitle("Playlists");
+
+        try {
+            int uiMode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+            if (uiMode == Configuration.UI_MODE_NIGHT_YES) {
+                toolbar.setPopupTheme(androidx.appcompat.R.style.ThemeOverlay_AppCompat_Dark);
+            }
+        } catch (Exception ignored) {}
 
         listView = findViewById(com.example.tempo.R.id.listView);
         addNewPlaylistButton = findViewById(com.example.tempo.R.id.NewPlaylistButton);
@@ -352,6 +366,15 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
         return true;
     }
 
+    @Override
+    public boolean onOptionsItemSelected(@NonNull android.view.MenuItem item) {
+        if (item.getItemId() == com.example.tempo.R.id.settings) {
+            promptForMusicFolder();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
     private final MediaControllerCompat.Callback controllerCallback = new MediaControllerCompat.Callback() {
         @Override
         public void onMetadataChanged(MediaMetadataCompat metadata) {
@@ -449,5 +472,50 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
     @Override
     protected int getNavigationItemId() {
         return com.example.tempo.R.id.playlistButton;
+    }
+
+    private void promptForMusicFolder() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(intent, REQUEST_CODE_PICK_FOLDER);
+        } catch (Exception e) {
+            // ignore if not available
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_PICK_FOLDER) {
+            if (data == null) return;
+            Uri treeUri = data.getData();
+            if (treeUri == null) return;
+            try { getContentResolver().takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
+            String resolved = resolveTreeUriToPath(treeUri);
+            SharedPreferences prefs = getSharedPreferences("tempo_prefs", MODE_PRIVATE);
+            if (resolved != null) prefs.edit().putString(PREFS_MUSIC_FOLDER, resolved).apply(); else prefs.edit().putString(PREFS_MUSIC_FOLDER, treeUri.toString()).apply();
+            // No direct playlist content refresh needed, but reload list just in case
+            loadPlaylists();
+        }
+    }
+
+    private String resolveTreeUriToPath(Uri treeUri) {
+        try {
+            String docId = DocumentsContract.getTreeDocumentId(treeUri);
+            String[] parts = docId.split(":");
+            String type = parts.length > 0 ? parts[0] : null;
+            String relPath = parts.length > 1 ? parts[1] : "";
+            if (type != null && (type.equalsIgnoreCase("primary") || type.equalsIgnoreCase("0"))) {
+                String base = Environment.getExternalStorageDirectory().getAbsolutePath();
+                if (relPath != null && !relPath.isEmpty()) return base + "/" + relPath;
+                return base;
+            } else if (type != null) {
+                String candidate = "/storage/" + type + (relPath != null && !relPath.isEmpty() ? "/" + relPath : "");
+                java.io.File f = new java.io.File(candidate);
+                if (f.exists()) return candidate;
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 }

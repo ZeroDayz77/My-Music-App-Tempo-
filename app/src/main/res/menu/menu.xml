@@ -31,7 +31,7 @@
         <menu>
             <item
                 android:id="@+id/settings"
-                android:title="Settings"
+                android:title="Choose Music Folder"
                 app:showAsAction="never">
             </item>
 
