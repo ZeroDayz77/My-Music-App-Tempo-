@@ -39,6 +39,7 @@
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
         android:layout_centerHorizontal="true"
+        android:background="@color/black"
         app:adSize="BANNER"
         app:adUnitId="ca-app-pub-3940256099942544/9214589741"
         tools:ignore="MissingConstraints"/>

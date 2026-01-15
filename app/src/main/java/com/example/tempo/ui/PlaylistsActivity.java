@@ -34,6 +34,9 @@ import android.support.v4.media.session.MediaControllerCompat;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 
+import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.AdListener;
+
 public class PlaylistsActivity extends BaseBottomNavActivity {
     private Toolbar toolbar;
 
@@ -224,6 +227,34 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
         nowPrev.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_PREV)));
         nowNext.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_NEXT)));
         nowPlayPause.setOnClickListener(v -> startService(new Intent(getApplicationContext(), com.example.tempo.Services.MediaPlaybackService.class).setAction(com.example.tempo.Services.MediaPlaybackService.ACTION_TOGGLE)));
+
+        // listen for ad load and adjust FAB position when ad/mini-player appear
+        AdView adView = findViewById(com.example.tempo.R.id.adView);
+        if (adView != null) {
+            try {
+                adView.setAdListener(new AdListener() {
+                    @Override
+                    public void onAdLoaded() {
+                        // Ensure layout measurements are available then adjust
+                        addNewPlaylistButton.post(() -> adjustFabForAdAndMiniBar());
+                    }
+
+                    @Override
+                    public void onAdFailedToLoad(@androidx.annotation.NonNull com.google.android.gms.ads.LoadAdError adError) {
+                        // On failure, recalc in case ad was hidden/changed
+                        addNewPlaylistButton.post(() -> adjustFabForAdAndMiniBar());
+                    }
+
+                    @Override
+                    public void onAdClosed() {
+                        addNewPlaylistButton.post(() -> adjustFabForAdAndMiniBar());
+                    }
+                });
+            } catch (Exception ignored) {}
+        }
+
+        // Initial adjustment (in case views are already present)
+        addNewPlaylistButton.post(this::adjustFabForAdAndMiniBar);
     }
 
     private void loadPlaylists() {
@@ -273,6 +304,8 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
         ImageButton playBtn = findViewById(com.example.tempo.R.id.nowPlayPause);
         if (meta == null || state == null || include == null || title == null || playBtn == null) {
             if (include != null) include.setVisibility(View.GONE);
+            // ensure FAB is repositioned when mini bar hides
+            adjustFabForAdAndMiniBar();
             return;
         }
 
@@ -286,13 +319,43 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
             if (skipShowAnimation) {
                 include.setVisibility(View.VISIBLE);
                 skipShowAnimation = false;
+                // adjust FAB now that mini bar is visible
+                adjustFabForAdAndMiniBar();
             } else {
                 include.setVisibility(View.VISIBLE);
                 include.setTranslationY(include.getHeight());
                 include.setAlpha(0f);
-                include.animate().translationY(0).alpha(1f).setDuration(250).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+                include.animate().translationY(0).alpha(1f).setDuration(250).setInterpolator(new AccelerateDecelerateInterpolator()).withEndAction(() -> adjustFabForAdAndMiniBar()).start();
             }
+        } else {
+            // already visible — ensure FAB accounts for current state
+            adjustFabForAdAndMiniBar();
         }
+    }
+
+    // Compute ad + mini-player heights and translate FAB upward so it stays above them
+    private void adjustFabForAdAndMiniBar() {
+        if (addNewPlaylistButton == null) return;
+        try {
+            View ad = findViewById(com.example.tempo.R.id.adView);
+            View mini = findViewById(com.example.tempo.R.id.nowPlayingInclude);
+
+            int extraPx = 0;
+            if (ad != null && ad.getVisibility() == View.VISIBLE) {
+                int h = ad.getHeight();
+                if (h <= 0) h = ad.getMeasuredHeight();
+                extraPx += Math.max(0, h);
+            }
+            if (mini != null && mini.getVisibility() == View.VISIBLE) {
+                int mh = mini.getHeight();
+                if (mh <= 0) mh = mini.getMeasuredHeight();
+                extraPx += Math.max(0, mh);
+            }
+
+            // If there is an extra offset, translate FAB up by that many pixels. Otherwise reset translation.
+            float target = extraPx > 0 ? -extraPx : 0f;
+            addNewPlaylistButton.animate().translationY(target).setDuration(200).start();
+        } catch (Exception ignored) {}
     }
 
     @Override
