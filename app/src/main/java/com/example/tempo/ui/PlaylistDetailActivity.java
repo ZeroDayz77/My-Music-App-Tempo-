@@ -41,6 +41,7 @@ public class PlaylistDetailActivity extends BaseBottomNavActivity {
     private ArrayList<PlaylistItem> items;
     private ListView listView;
     private PlaylistItemAdapter playlistItemAdapter;
+    private boolean sortAscending = true;
 
     MediaBrowserCompat mediaBrowser;
     private boolean skipShowAnimation = false;
@@ -200,6 +201,16 @@ public class PlaylistDetailActivity extends BaseBottomNavActivity {
 
     private void loadItems() {
         items = repository.getItemsForPlaylist(playlistId);
+        try {
+            java.util.Collections.sort(items, new java.util.Comparator<com.example.tempo.data.PlaylistItem>() {
+                @Override
+                public int compare(com.example.tempo.data.PlaylistItem a, com.example.tempo.data.PlaylistItem b) {
+                    if (a == null || a.getTitle() == null) return -1;
+                    if (b == null || b.getTitle() == null) return 1;
+                    return sortAscending ? a.getTitle().compareToIgnoreCase(b.getTitle()) : b.getTitle().compareToIgnoreCase(a.getTitle());
+                }
+            });
+        } catch (Exception ignored) {}
         // Use custom adapter to show each item with song_list_names layout
         playlistItemAdapter = new PlaylistItemAdapter(items);
         listView.setAdapter(playlistItemAdapter);
@@ -324,6 +335,12 @@ public class PlaylistDetailActivity extends BaseBottomNavActivity {
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if (item.getItemId() == android.R.id.home) {
             finish();
+            return true;
+        }
+        if (item.getItemId() == com.example.tempo.R.id.sort_button) {
+            sortAscending = !sortAscending;
+            item.setTitle(sortAscending ? "Sort A→Z" : "Sort Z→A");
+            loadItems();
             return true;
         }
         return super.onOptionsItemSelected(item);

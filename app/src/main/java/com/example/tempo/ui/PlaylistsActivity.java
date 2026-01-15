@@ -47,6 +47,8 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
 
     private ArrayList<Playlist> playlists;
     private PlaylistAdapter playlistAdapter;
+    // Sort state: true = ascending (A->Z), false = descending (Z->A)
+    private boolean sortAscending = true;
 
     MediaBrowserCompat mediaBrowser;
     private boolean skipShowAnimation = false;
@@ -259,6 +261,17 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
 
     private void loadPlaylists() {
         playlists = repository.getAllPlaylists();
+        // Default: sort alphabetically by playlist name
+        try {
+            java.util.Collections.sort(playlists, new java.util.Comparator<com.example.tempo.data.Playlist>() {
+                @Override
+                public int compare(com.example.tempo.data.Playlist a, com.example.tempo.data.Playlist b) {
+                    if (a == null || a.getName() == null) return -1;
+                    if (b == null || b.getName() == null) return 1;
+                    return sortAscending ? a.getName().compareToIgnoreCase(b.getName()) : b.getName().compareToIgnoreCase(a.getName());
+                }
+            });
+        } catch (Exception ignored) {}
         playlistAdapter = new PlaylistAdapter(this, playlists);
         listView.setAdapter(playlistAdapter);
     }
@@ -284,6 +297,59 @@ public class PlaylistsActivity extends BaseBottomNavActivity {
             dlg.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(getResources().getColor(android.R.color.white));
             dlg.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(getResources().getColor(android.R.color.white));
         } catch (Exception ignored) {}
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(android.view.Menu menu) {
+        getMenuInflater().inflate(com.example.tempo.R.menu.menu, menu);
+        // Setup search view behavior (menu already has search_button)
+        android.view.MenuItem searchItem = menu.findItem(com.example.tempo.R.id.search_button);
+        androidx.appcompat.widget.SearchView searchView = (androidx.appcompat.widget.SearchView) searchItem.getActionView();
+        if (searchView != null) {
+            searchView.setOnQueryTextListener(new androidx.appcompat.widget.SearchView.OnQueryTextListener() {
+                @Override
+                public boolean onQueryTextSubmit(String query) {
+                    // filter by playlist name
+                    try {
+                        ArrayList<Playlist> filtered = new ArrayList<>();
+                        for (Playlist p : playlists) if (p.getName() != null && p.getName().toLowerCase().contains(query.toLowerCase())) filtered.add(p);
+                        playlistAdapter = new PlaylistAdapter(PlaylistsActivity.this, filtered);
+                        listView.setAdapter(playlistAdapter);
+                    } catch (Exception ignored) {}
+                    return false;
+                }
+
+                @Override
+                public boolean onQueryTextChange(String newText) {
+                    try {
+                        if (newText == null || newText.isEmpty()) {
+                            playlistAdapter = new PlaylistAdapter(PlaylistsActivity.this, playlists);
+                            listView.setAdapter(playlistAdapter);
+                        } else {
+                            ArrayList<Playlist> filtered = new ArrayList<>();
+                            for (Playlist p : playlists) if (p.getName() != null && p.getName().toLowerCase().contains(newText.toLowerCase())) filtered.add(p);
+                            playlistAdapter = new PlaylistAdapter(PlaylistsActivity.this, filtered);
+                            listView.setAdapter(playlistAdapter);
+                        }
+                    } catch (Exception ignored) {}
+                    return false;
+                }
+            });
+        }
+
+        // Sort button action
+        android.view.MenuItem sortItem = menu.findItem(com.example.tempo.R.id.sort_button);
+        if (sortItem != null) {
+            sortItem.setOnMenuItemClickListener(item -> {
+                sortAscending = !sortAscending;
+                sortItem.setTitle(sortAscending ? "Sort A→Z" : "Sort Z→A");
+                loadPlaylists();
+                return true;
+            });
+            sortItem.setTitle(sortAscending ? "Sort A→Z" : "Sort Z→A");
+        }
+
+        return true;
     }
 
     private final MediaControllerCompat.Callback controllerCallback = new MediaControllerCompat.Callback() {

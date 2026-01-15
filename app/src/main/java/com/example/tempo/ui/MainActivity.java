@@ -83,6 +83,9 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
     // AdView reference
     private AdView adView;
 
+    // Sort state for main song list
+    private boolean songsSortAscending = true;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -296,6 +299,30 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
         searchView.setIconified(true);
         searchView.onActionViewCollapsed();
 
+        // Sort button wiring
+        MenuItem sortItem = menu.findItem(com.example.tempo.R.id.sort_button);
+        if (sortItem != null) {
+            sortItem.setTitle(songsSortAscending ? "Sort A→Z" : "Sort Z→A");
+            sortItem.setOnMenuItemClickListener(item -> {
+                songsSortAscending = !songsSortAscending;
+                sortItem.setTitle(songsSortAscending ? "Sort A→Z" : "Sort Z→A");
+                // re-display songs with new sort order
+                if (mySongs != null) {
+                    try {
+                        java.util.Collections.sort(mySongs, new java.util.Comparator<java.io.File>() {
+                            @Override
+                            public int compare(java.io.File f1, java.io.File f2) {
+                                return songsSortAscending ? f1.getName().compareToIgnoreCase(f2.getName()) : f2.getName().compareToIgnoreCase(f1.getName());
+                            }
+                        });
+                    } catch (Exception ignored) {}
+                    customAdapter.updateList(mySongs);
+                    listView.setAdapter(customAdapter);
+                }
+                return true;
+            });
+        }
+
         return true;
 
     }
@@ -390,7 +417,12 @@ public class MainActivity extends BaseBottomNavActivity implements com.example.t
         File myFiles = new File(extFilePath);
         mySongs = findSong(myFiles);
 
-        Collections.sort(mySongs, (file1, file2) -> file1.getName().compareToIgnoreCase(file2.getName()));
+        Collections.sort(mySongs, new java.util.Comparator<java.io.File>() {
+            @Override
+            public int compare(java.io.File file1, java.io.File file2) {
+                return file1.getName().compareToIgnoreCase(file2.getName());
+            }
+        });
 
         items = new String[mySongs.size()];
         for (int i = 0; i < mySongs.size(); i++) {
