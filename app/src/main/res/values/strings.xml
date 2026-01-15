@@ -9,6 +9,7 @@
 
     <string name="menu_home">Home</string>
     <string name="menu_lyrics">Lyrics</string>
+    <string name="menu_share">Share Song</string>
     <string name="lyrics_looking_up">Looking up lyrics...</string>
     <string name="lyrics_looking_up_retry">Looking up lyrics... (tap to retry)</string>
     <string name="lyrics_offline">Lyrics not available offline. Connect to the internet to search.</string>
@@ -18,4 +19,5 @@
 
     <!-- Interstitial ad unit id for MusicPlayerActivity. Test ad unit ID -->
     <string name="music_player_interstitial_ad_unit_id">ca-app-pub-3940256099942544/1033173712</string>
+    <string name="app_link">https://play.google.com/store/apps/details?id=com.example.tempo</string>
 </resources>

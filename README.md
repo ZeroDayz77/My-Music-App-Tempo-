@@ -29,7 +29,7 @@ This was a good learning experience and reinforced the reason for me as to why w
 
 - [ ] Add the time of each song to the song select view.
 
-- [ ] Share song option.
+- [x] Share song option.
 
 - [x] Plaintext & LRC-formatted Synced Lyrics
 

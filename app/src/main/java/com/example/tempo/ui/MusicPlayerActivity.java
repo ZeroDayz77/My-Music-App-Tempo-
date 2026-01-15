@@ -68,8 +68,6 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
     Runnable seekRunnable;
     public static Bundle bundle;
     public static volatile boolean shouldAnimateMiniBarOnReturn = false;
-
-    // Interstitial ad
     private InterstitialAd mInterstitialAd;
     private boolean interstitialShown = false;
     private boolean interstitialShowing = false;
@@ -86,6 +84,7 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         int id = item.getItemId();
         int lyricsId = com.example.tempo.R.id.menu_lyrics;
+        int shareId = com.example.tempo.R.id.menu_share;
         if (id == android.R.id.home) {
             onBackPressed();
             return true;
@@ -107,6 +106,40 @@ public class MusicPlayerActivity extends BaseBottomNavActivity implements com.ex
             }
             startActivity(intent);
             overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+            return true;
+        } else if (id == shareId) {
+            String currentSong = songName != null ? songName : "";
+            String artist = null;
+            try {
+                if (mediaController != null && mediaController.getMetadata() != null) {
+                    artist = mediaController.getMetadata().getString(MediaMetadataCompat.METADATA_KEY_ARTIST);
+                }
+            } catch (Exception ignored) {}
+
+            String appName = getString(com.example.tempo.R.string.app_name);
+            String appLink = getString(com.example.tempo.R.string.app_link);
+
+            String shareText;
+            if ((artist == null || artist.isEmpty()) && currentSong != null && !currentSong.isEmpty()) {
+                shareText = "Hey, I'm listening to " + currentSong + " on " + appName + ". Download the app here " + appLink + "!";
+            } else if (currentSong != null && !currentSong.isEmpty()) {
+                // If artist exists, include it as well (kept simple but helpful)
+                shareText = "Hey, I'm listening to " + currentSong + (artist != null && !artist.isEmpty() ? " by " + artist : "") + " on " + appName + ". Download the app here " + appLink + "!";
+            } else {
+                // Fallback generic message
+                shareText = "I'm using " + appName + ". Download the app here " + appLink + "!";
+            }
+
+            try {
+                Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                shareIntent.setType("text/plain");
+                shareIntent.putExtra(Intent.EXTRA_SUBJECT, appName);
+                shareIntent.putExtra(Intent.EXTRA_TEXT, shareText);
+                startActivity(Intent.createChooser(shareIntent, "Share via"));
+            } catch (Exception e) {
+                Log.w("MusicPlayerActivity", "share failed", e);
+            }
+
             return true;
         }
         return super.onOptionsItemSelected(item);
